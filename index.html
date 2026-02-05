@@ -8,8 +8,6 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="cursor-dot"></div>
-    </div>
 
     <div id="ui-overlay">
         <h2 id="game-title">CatRoyal 🐾</h2>
@@ -17,21 +15,19 @@
             <span id="dot" class="status-dot"></span>
             <span id="status-text">GPS déconnecté</span>
         </div>
-        <div class="hp-container">
-            <div id="hp-fill"></div>
-        </div>
+        <div id="zone-info">Zone : <span id="current-zone-name">---</span></div>
+        <div class="hp-container"><div id="hp-fill"></div></div>
+        <div id="controls-hint">Mode JEU</div>
     </div>
-
-    <div id="custom-cursor"><div id="cursor-dot"></div></div>
 
     <div id="editor-controls">
         <button id="btn-toggle" class="btn-editor" onclick="toggleMode()">Éditeur [E]</button>
-        <button id="btn-snap" class="btn-editor" onclick="toggleSnap()" style="display:none;">Magnétisme [M]</button>
-        <button id="btn-center" class="btn-editor active" onclick="enableAutoCenter()">📍 Centrer</button>
+        <button id="btn-theme" class="btn-editor" onclick="toggleTheme()">Mode Sombre</button>
+        <button id="btn-center" class="btn-editor" onclick="enableAutoCenter()">📍 Centrer</button>
         <button id="btn-save" class="btn-editor" onclick="exportZone()" style="display:none;">Créer [Entrée]</button>
     </div>
 
-<div id="map"></div>
+    <div id="map"></div>
 
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
