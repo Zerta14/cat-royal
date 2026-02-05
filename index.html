@@ -3,34 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>CatRoyal Engine</title>
+    <title>CatRoyal 🐾</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div id="custom-cursor"><div id="cursor-dot"></div></div>
-
-    <div id="ui-overlay">
-        <h2 id="game-title">CatRoyal 🐾</h2>
-        <div id="status-bar">
-            <span id="dot" class="status-dot"></span>
-            <span id="status-text">GPS déconnecté</span>
+    <!-- ============= PAGE LOGIN ============= -->
+    <div id="page-login" class="page">
+        <div class="login-container">
+            <h1>🐾 CatRoyal</h1>
+            <input type="text" id="input-pseudo" placeholder="Pseudo" maxlength="20">
+            <input type="password" id="input-password" placeholder="Mot de passe" autocomplete="off">
+            <button id="btn-login" onclick="login()">Connexion</button>
+            <div id="login-error" class="error-msg"></div>
         </div>
-        <div id="zone-info">Zone : <span id="current-zone-name">---</span></div>
-        <div class="hp-container"><div id="hp-fill"></div></div>
-        <div id="controls-hint">Mode JEU</div>
     </div>
 
-    <div id="editor-controls">
-        <button id="btn-toggle" class="btn-editor" onclick="toggleMode()">Éditeur [E]</button>
-        <button id="btn-theme" class="btn-editor" onclick="toggleTheme()">Mode Sombre</button>
-        <button id="btn-center" class="btn-editor active" onclick="enableAutoCenter()">📍 Centrer</button>
-        <button id="btn-save" class="btn-editor" onclick="exportZone()" style="display:none;">Créer [Entrée]</button>
+    <!-- ============= PAGE DASHBOARD ============= -->
+    <div id="page-dashboard" class="page" style="display:none;">
+        <div class="dashboard-header">
+            <h1>🐾 CatRoyal</h1>
+            <div class="user-info">
+                <span id="user-pseudo"></span>
+                <button onclick="logout()">Déconnexion</button>
+            </div>
+        </div>
+        
+        <div class="dashboard-content">
+            <div class="dashboard-section">
+                <h2>Parties en cours</h2>
+                <button class="btn-primary" onclick="createGame()">➕ Créer une partie</button>
+                <div id="games-list"></div>
+            </div>
+
+            <div class="dashboard-section">
+                <h2>Maps disponibles</h2>
+                <button class="btn-primary" onclick="showMapEditor()">🗺️ Créer une map</button>
+                <div id="maps-list"></div>
+            </div>
+        </div>
     </div>
 
-    <div id="map"></div>
+    <!-- ============= PAGE LOBBY ============= -->
+    <div id="page-lobby" class="page" style="display:none;">
+        <div class="lobby-container">
+            <button class="btn-back" onclick="leaveLobby()">← Retour</button>
+            
+            <h2>Lobby de partie</h2>
+            
+            <div class="lobby-section">
+                <h3>Sélection de la map</h3>
+                <select id="lobby-map-select" onchange="updateLobbyMap()">
+                    <option value="">-- Choisir une map --</option>
+                </select>
+                <div id="lobby-map-preview">Aucune map sélectionnée</div>
+            </div>
 
+            <div class="lobby-section">
+                <h3>Joueurs (<span id="lobby-player-count">0</span>)</h3>
+                <div id="lobby-players-list"></div>
+            </div>
+
+            <div class="lobby-section" id="lobby-teams-section" style="display:none;">
+                <h3>Formation des équipes</h3>
+                <button onclick="autoAssignTeams()">🎲 Équipes automatiques</button>
+                <button onclick="showManualTeams()">✋ Équipes manuelles</button>
+                <div id="teams-preview"></div>
+            </div>
+
+            <button id="btn-start-game" class="btn-primary" onclick="startGame()" style="display:none;">
+                🚀 Lancer la partie
+            </button>
+        </div>
+    </div>
+
+    <!-- ============= PAGE ÉDITEUR DE MAP ============= -->
+    <div id="page-editor" class="page" style="display:none;">
+        <div id="custom-cursor"><div id="cursor-dot"></div></div>
+        
+        <div class="editor-ui">
+            <button class="btn-back" onclick="leaveEditor()">← Retour</button>
+            <h2>Éditeur de map</h2>
+            
+            <div class="editor-info">
+                <input type="text" id="map-name-input" placeholder="Nom de la map" maxlength="30">
+                <div id="zone-count">Zones: 0</div>
+            </div>
+        </div>
+
+        <div id="editor-controls">
+            <button id="btn-snap" class="btn-editor active" onclick="toggleSnap()">Aimant [M]</button>
+            <button id="btn-save-map" class="btn-editor" onclick="saveMap()">💾 Sauvegarder</button>
+            <button id="btn-clear-all" class="btn-editor" onclick="clearAllZones()">🗑️ Tout effacer</button>
+        </div>
+
+        <div id="map-editor"></div>
+    </div>
+
+    <!-- ============= PAGE JEU ============= -->
+    <div id="page-game" class="page" style="display:none;">
+        <div id="game-ui">
+            <div class="game-header">
+                <div class="timer-display">
+                    <div id="game-phase">Phase de cache</div>
+                    <div id="game-timer">3:00</div>
+                </div>
+                <div class="role-badge" id="player-role">SOURIS</div>
+            </div>
+
+            <div class="game-stats">
+                <div class="stat-item" id="hp-display">
+                    <span>PV:</span>
+                    <div class="hp-bar">
+                        <div id="hp-fill" style="width: 100%"></div>
+                    </div>
+                    <span id="hp-value">100</span>
+                </div>
+                <div class="stat-item" id="team-display">
+                    Équipe: <span id="team-name">--</span>
+                </div>
+            </div>
+
+            <!-- Contrôles Chats -->
+            <div id="cat-controls" style="display:none;">
+                <h3>Zones à supprimer: <span id="zones-to-delete">2</span></h3>
+                <div id="zone-delete-info">Cliquez sur une zone pour la supprimer</div>
+                <div id="final-zone-info"></div>
+            </div>
+
+            <!-- Contrôles Souris -->
+            <div id="mouse-controls" style="display:none;">
+                <button id="btn-declare-touched" onclick="declareTouched()">❌ Je suis touché</button>
+                <div id="danger-warning" style="display:none;">⚠️ Vous êtes dans une zone morte!</div>
+            </div>
+        </div>
+
+        <div id="map-game"></div>
+    </div>
+
+    <!-- Scripts -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
