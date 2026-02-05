@@ -26,16 +26,17 @@ body { margin: 0; padding: 0; background: #121212; font-family: sans-serif; over
     background: #333; color: white; transition: 0.2s;
 }
 
-/* Classe universelle pour les boutons activés (Jaune) */
+/* La classe magique pour cacher proprement */
+.hidden { display: none !important; }
+
+/* Classe jaune pour l'activation */
 .btn-editor.active { 
     background: #ffcc00 !important; 
     color: black !important; 
 }
 
-/* Spécifique au bouton centrer (Bleu) */
+/* Bouton centrer reste bleu */
 #btn-center.active { background: #007bff !important; color: white !important; }
-
-/* ... (le reste de ton CSS inchangé) ... */
 
 /* On force la disparition du curseur sur TOUS les éléments de la map */
 .editor-active, .editor-active .leaflet-container, .editor-active .leaflet-interactive {
