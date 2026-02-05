@@ -53,18 +53,45 @@ function toggleMode() {
 
 map.on('click', (e) => {
     if (!isEditorMode) return;
+    
     let coords = e.latlng;
+    let point = turf.point([coords.lng, coords.lat]);
+    let minDistance = 12; // Seuil d'aimantage en mètres
+    let snappedCoords = null;
 
-    // Magnétisme (Snap)
-    snapMarkers.eachLayer(layer => {
-        if (map.distance(coords, layer.getLatLng()) < 12) {
-            coords = layer.getLatLng();
+    // 1. CHERCHER LE MAGNÉTISME (SNAP)
+    // On parcourt toutes les zones déjà dessinées ET le tracé en cours
+    map.eachLayer((layer) => {
+        if ((layer instanceof L.Polygon || layer instanceof L.Polyline) && layer !== tempLines) {
+            
+            // Convertir le layer en GeoJSON pour Turf
+            const geojson = layer.toGeoJSON();
+            
+            // Trouver le point le plus proche sur le contour (segment)
+            const snapped = turf.nearestPointOnLine(geojson, point, {units: 'meters'});
+            
+            if (snapped.properties.dist < minDistance) {
+                snappedCoords = [snapped.geometry.coordinates[1], snapped.geometry.coordinates[0]];
+                minDistance = snapped.properties.dist; // On garde le plus proche si plusieurs
+            }
         }
     });
 
+    // Si on a trouvé un point proche sur une ligne, on remplace les coordonnées
+    if (snappedCoords) {
+        coords = L.latLng(snappedCoords[0], snappedCoords[1]);
+    }
+
+    // 2. AJOUTER LE POINT
     currentDraftPoints.push([coords.lat, coords.lng]);
     tempLines.setLatLngs(currentDraftPoints);
-    L.circleMarker(coords, {radius: 5, color: '#00ffff'}).addTo(snapMarkers);
+    
+    // Petit indicateur visuel
+    L.circleMarker(coords, {
+        radius: 4, 
+        color: snappedCoords ? '#00ff00' : '#00ffff', // Vert si aimanté
+        fillOpacity: 1
+    }).addTo(snapMarkers);
 });
 
 function exportZone() {
