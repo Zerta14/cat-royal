@@ -3,103 +3,77 @@ const firebaseConfig = {
     apiKey: "AIzaSyBB1Ly4gEo0jZakLo1ZWtaKz9-HriOy-CM",
     authDomain: "cat-royal.firebaseapp.com",
     projectId: "cat-royal",
-    storageBucket: "cat-royal.firebasestorage.app",
-    messagingSenderId: "526911138487",
-    appId: "1:526911138487:web:6e3db2db2a561df0007b32",
     databaseURL: "https://cat-royal-default-rtdb.europe-west1.firebasedatabase.app/" 
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const playerId = "Player_" + Math.floor(Math.random() * 999);
 
-// --- INITIALISATION MAP ---
-const themes = {
-    dark: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
-    light: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
-};
-let currentTheme = 'dark';
+// --- SETUP CARTE ---
 const map = L.map('map', { center: [48.8475, 2.4390], zoom: 17, zoomControl: false });
-const mapLayer = L.tileLayer(themes[currentTheme]).addTo(map);
+const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png').addTo(map);
 
 // --- COUCHES ---
 const zonesGroup = L.featureGroup().addTo(map); // Zones définitives
-const editorLayer = L.layerGroup(); // Tout ce qui part quand on quitte l'éditeur
-const tempLines = L.polyline([], {color: '#00ffff', weight: 4, interactive: false}).addTo(editorLayer);
-const ghostCursor = L.circleMarker([0,0], {radius: 7, color: '#ff00ff', fillOpacity: 1, interactive: false}).addTo(editorLayer);
-const myMarker = L.circleMarker([48.8475, 2.4390], {radius: 8, color: 'white', fillColor: '#007bff', fillOpacity: 1, zIndexOffset: 1000}).addTo(map);
+const editorGroup = L.layerGroup(); // Éléments temporaires (ghost, points, ligne)
+const tempLines = L.polyline([], {color: '#00ffff', weight: 3}).addTo(editorGroup);
+const ghostCursor = L.circleMarker([0,0], {radius: 6, color: '#ff00ff', opacity: 1}).addTo(editorGroup);
+const myMarker = L.circleMarker([0,0], {radius: 8, color: 'white', fillColor: '#007bff', fillOpacity: 1}).addTo(map);
 
 // --- ÉTATS ---
 let isEditorMode = false;
 let autoCenter = true;
-let snapEnabled = true;
 let shiftPressed = false;
 let currentDraftPoints = [];
+let draftMarkers = []; // Pour pouvoir les supprimer avec Ctrl+Z
 
 // --- GPS ---
-function updateGPS(pos) {
+navigator.geolocation.watchPosition(pos => {
     const coords = [pos.coords.latitude, pos.coords.longitude];
     myMarker.setLatLng(coords);
+    if (autoCenter) map.setView(coords, map.getZoom(), { animate: true });
     document.getElementById('status-text').innerText = "LIVE";
-    document.getElementById('dot').classList.add('online');
-
-    if (autoCenter) {
-        map.setView(coords, map.getZoom(), { animate: true });
-    }
-    // Sync simplifiée pour le test
     db.ref('joueurs/' + playerId).update({ lat: coords[0], lng: coords[1], lastSeen: Date.now() });
-}
+}, null, { enableHighAccuracy: true });
 
-if (navigator.geolocation) {
-    navigator.geolocation.watchPosition(updateGPS, () => {
-        document.getElementById('status-text').innerText = "Erreur GPS";
-    }, { enableHighAccuracy: true });
-}
-
-// --- MOTEUR DE SNAP (SIMPLE & PUISSANT) ---
+// --- MOTEUR DE MAGNÉTISME (SIMPLIFIÉ) ---
 window.addEventListener('mousemove', (e) => {
     if (!isEditorMode) return;
 
-    // Curseur custom
-    const cursorEl = document.getElementById('custom-cursor');
-    cursorEl.style.left = e.clientX + 'px';
-    cursorEl.style.top = e.clientY + 'px';
+    // Déplacement curseur custom
+    const cursor = document.getElementById('custom-cursor');
+    cursor.style.left = e.clientX + 'px';
+    cursor.style.top = e.clientY + 'px';
 
     const mouseLatLng = map.mouseEventToLatLng(e);
     const mouseP = map.latLngToLayerPoint(mouseLatLng);
-    
     let bestLatLng = mouseLatLng;
-    let snapType = "none";
+    let type = "none";
 
-    if (snapEnabled && !shiftPressed) {
-        let bestDist = 40; // Rayon de snap
+    if (!shiftPressed) {
+        let bestDist = 40;
 
         // 1. Angles (Priorité)
         let nodes = [];
-        zonesGroup.eachLayer(l => { if(l.getLatLngs) nodes = nodes.concat(l.getLatLngs()[0]); });
+        zonesGroup.eachLayer(z => nodes = nodes.concat(z.getLatLngs()[0]));
         currentDraftPoints.forEach(p => nodes.push(L.latLng(p[0], p[1])));
 
         nodes.forEach(node => {
             let d = mouseP.distanceTo(map.latLngToLayerPoint(node));
-            if (d < bestDist) {
-                bestDist = d;
-                bestLatLng = node;
-                snapType = "angle";
-            }
+            if (d < bestDist) { bestDist = d; bestLatLng = node; type = "angle"; }
         });
 
         // 2. Segments
-        if (snapType === "none") {
-            zonesGroup.eachLayer(l => {
-                const latlngs = l.getLatLngs()[0];
-                for (let i = 0; i < latlngs.length; i++) {
-                    const p1 = map.latLngToLayerPoint(latlngs[i]);
-                    const p2 = map.latLngToLayerPoint(latlngs[(i + 1) % latlngs.length]);
+        if (type === "none") {
+            zonesGroup.eachLayer(z => {
+                const pts = z.getLatLngs()[0];
+                for (let i = 0; i < pts.length; i++) {
+                    const p1 = map.latLngToLayerPoint(pts[i]);
+                    const p2 = map.latLngToLayerPoint(pts[(i + 1) % pts.length]);
                     const closest = L.LineUtil.closestPointOnSegment(mouseP, p1, p2);
-                    let d = mouseP.distanceTo(closest);
-                    if (d < 30) {
-                        bestDist = d;
+                    if (mouseP.distanceTo(closest) < 30) {
                         bestLatLng = map.layerPointToLatLng(closest);
-                        snapType = "segment";
+                        type = "segment";
                     }
                 }
             });
@@ -108,98 +82,69 @@ window.addEventListener('mousemove', (e) => {
 
     ghostCursor.setLatLng(bestLatLng);
     const colors = { angle: "#00ff00", segment: "#00ffff", none: "#ff00ff" };
-    const color = colors[snapType];
-    ghostCursor.setStyle({ color: color });
-    document.getElementById('cursor-dot').style.background = color;
+    ghostCursor.setStyle({ color: colors[type] });
+    document.getElementById('cursor-dot').style.background = colors[type];
 });
 
-// --- INTERACTIONS ---
+// --- ACTIONS ---
 map.on('click', () => {
     if (!isEditorMode) return;
-    const target = ghostCursor.getLatLng();
-    currentDraftPoints.push([target.lat, target.lng]);
+    const pos = ghostCursor.getLatLng();
+    currentDraftPoints.push([pos.lat, pos.lng]);
+    
+    // Mise à jour visuelle
     tempLines.setLatLngs(currentDraftPoints);
-
-    // POINT IMMÉDIATEMENT VISIBLE
-    L.circleMarker(target, { radius: 4, color: 'white', fillColor: 'cyan', fillOpacity: 1, interactive: false }).addTo(editorLayer);
+    const m = L.circleMarker(pos, {radius: 4, color: 'white', fillColor: 'cyan', fillOpacity: 1}).addTo(editorGroup);
+    draftMarkers.push(m);
 });
+
+function exportZone() {
+    if (currentDraftPoints.length < 3) return;
+    const poly = L.polygon(currentDraftPoints, {color: '#ffcc00', fillOpacity: 0.4}).addTo(zonesGroup);
+    poly.on('contextmenu', (e) => { L.DomEvent.stopPropagation(e); if(confirm("Supprimer ?")) zonesGroup.removeLayer(poly); });
+    clearEditor();
+}
+
+function clearEditor() {
+    currentDraftPoints = [];
+    draftMarkers.forEach(m => editorGroup.removeLayer(m));
+    draftMarkers = [];
+    tempLines.setLatLngs([]);
+}
 
 function toggleMode() {
     isEditorMode = !isEditorMode;
     document.getElementById('btn-toggle').classList.toggle('active', isEditorMode);
-    document.body.classList.toggle('editor-active', isEditorMode);
     document.getElementById('custom-cursor').style.display = isEditorMode ? 'block' : 'none';
-
+    document.body.classList.toggle('editor-active', isEditorMode);
+    
     if (isEditorMode) {
-        editorLayer.addTo(map);
+        editorGroup.addTo(map);
     } else {
-        map.removeLayer(editorLayer); // Retire tout d'un coup (ligne, points, ghost)
-        currentDraftPoints = [];
-        tempLines.setLatLngs([]);
-        editorLayer.clearLayers();
-        // On remet les outils dans le layer vide pour le prochain ON
-        tempLines.addTo(editorLayer);
-        ghostCursor.addTo(editorLayer);
+        clearEditor();
+        map.removeLayer(editorGroup);
     }
 }
 
-function exportZone() {
-    if (currentDraftPoints.length < 3) return;
-    const poly = L.polygon(currentDraftPoints, {color: '#ffcc00', fillOpacity: 0.4, weight: 3}).addTo(zonesGroup);
-    poly.on('contextmenu', (e) => { 
-        L.DomEvent.stopPropagation(e); 
-        if(confirm("Supprimer ?")) zonesGroup.removeLayer(poly); 
-    });
-    // On simule une sortie/entrée du mode pour tout nettoyer
-    toggleMode(); toggleMode(); 
-}
-
-// --- AUTRES ---
-function enableAutoCenter() {
-    autoCenter = true;
-    document.getElementById('btn-center').classList.add('active');
-    map.panTo(myMarker.getLatLng());
-}
-map.on('movestart', (e) => { if(!e.hard) { autoCenter = false; document.getElementById('btn-center').classList.remove('active'); }});
-
+// --- RACCOURCIS ---
 window.addEventListener('keydown', (e) => {
-    // Touche Maj pour désactiver l'aimant
+    const key = e.key.toLowerCase();
     if (e.key === "Shift") shiftPressed = true;
+    if (key === 'e') toggleMode();
     
-    // E pour Toggle Mode
-    if (e.key.toLowerCase() === 'e') toggleMode();
-
     if (isEditorMode) {
-        // ENTER pour valider
         if (e.key === 'Enter') exportZone();
-
-        // CTRL + Z pour annuler
-        if (e.ctrlKey && e.key.toLowerCase() === 'z') {
-            e.preventDefault(); // Empêche l'action par défaut du navigateur
-            
-            if (currentDraftPoints.length > 0) {
-                // 1. Enlever la dernière coordonnée du tableau
-                currentDraftPoints.pop();
-                
-                // 2. Mettre à jour la ligne bleue
-                tempLines.setLatLngs(currentDraftPoints);
-                
-                // 3. Enlever le dernier point blanc visuel
-                removeLastDraftMarker();
-            }
+        if (e.ctrlKey && key === 'z') {
+            e.preventDefault();
+            currentDraftPoints.pop();
+            tempLines.setLatLngs(currentDraftPoints);
+            const lastM = draftMarkers.pop();
+            if (lastM) editorGroup.removeLayer(lastM);
         }
     }
 });
 window.addEventListener('keyup', (e) => { if (e.key === "Shift") shiftPressed = false; });
 
-function removeLastDraftMarker() {
-    // On récupère tous les calques du mode éditeur
-    let layers = editorLayer.getLayers();
-    // On cherche le dernier CircleMarker (les points blancs) en partant de la fin
-    for (let i = layers.length - 1; i >= 0; i--) {
-        if (layers[i] instanceof L.CircleMarker && layers[i] !== ghostCursor) {
-            editorLayer.removeLayer(layers[i]);
-            break; 
-        }
-    }
-}
+// --- UTILS ---
+function enableAutoCenter() { autoCenter = true; map.panTo(myMarker.getLatLng()); }
+map.on('movestart', (e) => { if(!e.hard) autoCenter = false; });
