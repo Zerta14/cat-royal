@@ -1,34 +1,37 @@
-/* État de base (sombre) */
+body { margin: 0; padding: 0; background: #121212; font-family: sans-serif; overflow: hidden; }
+#map { height: 100vh; width: 100vw; }
+
+/* UI Overlay */
+#editor-controls {
+    position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+    z-index: 1000; display: flex; gap: 8px; background: rgba(0, 0, 0, 0.8);
+    padding: 10px; border-radius: 50px; border: 1px solid #333;
+}
+
+/* Style Unique des Boutons */
 .btn-editor {
     padding: 8px 15px; border: none; border-radius: 20px;
     font-weight: bold; cursor: pointer; font-size: 11px;
     background: #333; color: white; transition: 0.2s;
-    border: 1px solid rgba(255,255,255,0.1);
 }
 
-/* État : Survol (Highlight) */
-.btn-editor:hover {
-    background: #444;
-    transform: translateY(-1px);
-}
+.btn-editor:hover { background: #444; }
 
-/* État : Activé (Jaune/Noir) */
+/* Classe de référence pour l'activation (Jaune) */
 .btn-editor.active {
     background: #ffcc00 !important;
     color: black !important;
-    box-shadow: 0 0 10px rgba(255, 204, 0, 0.3);
 }
 
-/* Cache automatique */
-.hidden { display: none !important; }
+/* Curseur de précision */
+.editor-active { cursor: none !important; }
+.editor-active .leaflet-interactive { cursor: none !important; }
 
-/* Curseur Custom */
 #custom-cursor {
     position: fixed; width: 24px; height: 24px; pointer-events: none;
-    z-index: 10000; transform: translate(-50%, -50%);
+    z-index: 10000; display: none; transform: translate(-50%, -50%);
 }
 #cursor-dot {
     width: 6px; height: 6px; border-radius: 50%;
     margin: 9px auto; box-shadow: 0 0 5px rgba(0,0,0,0.5);
-    transition: background 0.1s;
 }
