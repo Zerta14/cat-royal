@@ -9,7 +9,9 @@
 </head>
 <body>
 
-    <div id="custom-cursor"><div id="cursor-dot"></div></div>
+    <div id="custom-cursor" class="hidden">
+        <div id="cursor-dot"></div>
+    </div>
 
     <div id="ui-overlay">
         <h2 id="game-title">CatRoyal 🐾</h2>
@@ -17,17 +19,16 @@
             <span id="dot" class="status-dot"></span>
             <span id="status-text">GPS déconnecté</span>
         </div>
-        <div id="zone-info">Zone : <span id="current-zone-name">---</span></div>
-        <div class="hp-container"><div id="hp-fill"></div></div>
-        <div id="controls-hint">Mode JEU</div>
+        <div class="hp-container">
+            <div id="hp-fill"></div>
+        </div>
     </div>
 
     <div id="editor-controls">
         <button id="btn-toggle" class="btn-editor" onclick="toggleMode()">Éditeur [E]</button>
-        <button id="btn-theme" class="btn-editor" onclick="toggleTheme()">Mode Sombre</button>
-        <button id="btn-center" class="btn-editor" onclick="enableAutoCenter()">📍 Centrer</button>
-        <button id="btn-save" class="btn-editor" onclick="exportZone()" style="display:none;">Créer [Entrée]</button>
-        <button id="btn-snap" class="btn-editor active" onclick="toggleSnap()">Aimant [M]</button>
+        <button id="btn-center" class="btn-editor active" onclick="enableAutoCenter()">📍 Centrer</button>
+        <button id="btn-snap" class="btn-editor active hidden" onclick="toggleSnap()">Magnétisme [M]</button>
+        <button id="btn-save" class="btn-editor hidden" onclick="exportZone()">Créer [Entrée]</button>
     </div>
 
     <div id="map"></div>
