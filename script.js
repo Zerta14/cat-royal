@@ -158,3 +158,65 @@ window.addEventListener('keyup', (e) => { if (e.key === "Shift") shiftPressed = 
 // --- UTILS ---
 function enableAutoCenter() { autoCenter = true; map.panTo(myMarker.getLatLng()); }
 map.on('movestart', (e) => { if(!e.hard) autoCenter = false; });
+
+// --- (Début du script identique jusqu'aux fonctions d'action) ---
+
+function toggleSnap() {
+    snapEnabled = !snapEnabled;
+    const btn = document.getElementById('btn-snap');
+    if (btn) {
+        // On utilise la classe .active pour le mettre en jaune ou gris
+        btn.classList.toggle('active', snapEnabled);
+    }
+}
+
+function toggleMode() {
+    isEditorMode = !isEditorMode;
+    
+    // Éléments à afficher/cacher
+    const btnToggle = document.getElementById('btn-toggle');
+    const btnSnap = document.getElementById('btn-snap');
+    const btnSave = document.getElementById('btn-save');
+    const cursor = document.getElementById('custom-cursor');
+
+    btnToggle.classList.toggle('active', isEditorMode);
+    cursor.style.display = isEditorMode ? 'block' : 'none';
+    document.body.classList.toggle('editor-active', isEditorMode);
+    
+    if (isEditorMode) {
+        editorGroup.addTo(map);
+        btnSnap.style.display = 'block'; // Affiche le bouton Magnétisme
+        btnSave.style.display = 'block'; // Affiche le bouton Créer
+        // On s'assure que le bouton snap a la bonne couleur selon l'état
+        btnSnap.classList.toggle('active', snapEnabled);
+    } else {
+        clearEditor();
+        map.removeLayer(editorGroup);
+        btnSnap.style.display = 'none'; // Cache le bouton Magnétisme
+        btnSave.style.display = 'none'; // Cache le bouton Créer
+    }
+}
+
+// --- RACCOURCIS ---
+window.addEventListener('keydown', (e) => {
+    const key = e.key.toLowerCase();
+    if (e.key === "Shift") shiftPressed = true;
+    if (key === 'e') toggleMode();
+    
+    // Le raccourci M ne marche que si on est en mode éditeur
+    if (key === 'm' && isEditorMode) toggleSnap(); 
+    
+    if (isEditorMode) {
+        if (e.key === 'Enter') exportZone();
+        if (e.ctrlKey && key === 'z') {
+            e.preventDefault();
+            if (currentDraftPoints.length > 0) {
+                currentDraftPoints.pop();
+                tempLines.setLatLngs(currentDraftPoints);
+                const lastM = draftMarkers.pop();
+                if (lastM) editorGroup.removeLayer(lastM);
+            }
+        }
+    }
+});
+// --- (Reste du script inchangé) ---

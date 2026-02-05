@@ -26,8 +26,16 @@ body { margin: 0; padding: 0; background: #121212; font-family: sans-serif; over
     background: #333; color: white; transition: 0.2s;
 }
 
-#btn-toggle.active { background: #ffcc00; color: black; }
-#btn-center.active { background: #007bff; }
+/* Classe universelle pour les boutons activés (Jaune) */
+.btn-editor.active { 
+    background: #ffcc00 !important; 
+    color: black !important; 
+}
+
+/* Spécifique au bouton centrer (Bleu) */
+#btn-center.active { background: #007bff !important; color: white !important; }
+
+/* ... (le reste de ton CSS inchangé) ... */
 
 /* On force la disparition du curseur sur TOUS les éléments de la map */
 .editor-active, .editor-active .leaflet-container, .editor-active .leaflet-interactive {
