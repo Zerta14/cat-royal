@@ -29,42 +29,26 @@ body { margin: 0; padding: 0; background: #121212; font-family: sans-serif; over
 #btn-toggle.active { background: #ffcc00; color: black; }
 #btn-center.active { background: #007bff; }
 
-/* Cache le curseur Windows sur la carte en mode éditeur */
-.editor-active {
+/* On force la disparition du curseur sur TOUS les éléments de la map */
+.editor-active, .editor-active .leaflet-container, .editor-active .leaflet-interactive {
     cursor: none !important;
 }
 
-/* Le viseur custom */
 #custom-cursor {
     position: fixed;
-    width: 30px;
-    height: 30px;
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    border-radius: 50%;
+    width: 24px;
+    height: 24px;
     pointer-events: none;
-    z-index: 9999;
+    z-index: 10000; /* Au-dessus de tout */
     display: none;
     transform: translate(-50%, -50%);
 }
 
-#custom-cursor::before, #custom-cursor::after {
-    content: '';
-    position: absolute;
-    background: white;
-}
-
-/* Les lignes du viseur */
-#custom-cursor::before { top: 50%; left: 0; width: 100%; height: 1px; }
-#custom-cursor::after { left: 50%; top: 0; width: 1px; height: 100%; }
-
-/* Le point central ultra-fin */
 #cursor-dot {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 4px;
-    height: 4px;
+    width: 6px;
+    height: 6px;
     background: #ff00ff;
     border-radius: 50%;
-    transform: translate(-50%, -50%);
+    margin: 9px auto; /* Centre le point dans les 24px */
+    box-shadow: 0 0 5px rgba(0,0,0,0.5);
 }
