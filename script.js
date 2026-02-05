@@ -163,8 +163,43 @@ function enableAutoCenter() {
 map.on('movestart', (e) => { if(!e.hard) { autoCenter = false; document.getElementById('btn-center').classList.remove('active'); }});
 
 window.addEventListener('keydown', (e) => {
+    // Touche Maj pour désactiver l'aimant
     if (e.key === "Shift") shiftPressed = true;
+    
+    // E pour Toggle Mode
     if (e.key.toLowerCase() === 'e') toggleMode();
-    if (isEditorMode && e.key === 'Enter') exportZone();
+
+    if (isEditorMode) {
+        // ENTER pour valider
+        if (e.key === 'Enter') exportZone();
+
+        // CTRL + Z pour annuler
+        if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+            e.preventDefault(); // Empêche l'action par défaut du navigateur
+            
+            if (currentDraftPoints.length > 0) {
+                // 1. Enlever la dernière coordonnée du tableau
+                currentDraftPoints.pop();
+                
+                // 2. Mettre à jour la ligne bleue
+                tempLines.setLatLngs(currentDraftPoints);
+                
+                // 3. Enlever le dernier point blanc visuel
+                removeLastDraftMarker();
+            }
+        }
+    }
 });
 window.addEventListener('keyup', (e) => { if (e.key === "Shift") shiftPressed = false; });
+
+function removeLastDraftMarker() {
+    // On récupère tous les calques du mode éditeur
+    let layers = editorLayer.getLayers();
+    // On cherche le dernier CircleMarker (les points blancs) en partant de la fin
+    for (let i = layers.length - 1; i >= 0; i--) {
+        if (layers[i] instanceof L.CircleMarker && layers[i] !== ghostCursor) {
+            editorLayer.removeLayer(layers[i]);
+            break; 
+        }
+    }
+}
