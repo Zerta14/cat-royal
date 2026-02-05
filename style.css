@@ -52,3 +52,5 @@ body { margin: 0; padding: 0; background: #121212; font-family: sans-serif; over
     margin: 9px auto; /* Centre le point dans les 24px */
     box-shadow: 0 0 5px rgba(0,0,0,0.5);
 }
+
+#btn-snap.disabled { background: #ff4444; color: white; }

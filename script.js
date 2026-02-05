@@ -1,4 +1,4 @@
-// --- CONFIGURATION ---
+// --- CONFIG ET SETUP ---
 const firebaseConfig = {
     apiKey: "AIzaSyBB1Ly4gEo0jZakLo1ZWtaKz9-HriOy-CM",
     authDomain: "cat-royal.firebaseapp.com",
@@ -8,12 +8,10 @@ const firebaseConfig = {
     appId: "1:526911138487:web:6e3db2db2a561df0007b32",
     databaseURL: "https://cat-royal-default-rtdb.europe-west1.firebasedatabase.app/" 
 };
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const playerId = "Player_" + Math.floor(Math.random() * 999);
 
-// --- SETUP MAP ---
 const themes = {
     dark: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
     light: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
@@ -25,6 +23,8 @@ const mapLayer = L.tileLayer(themes[currentTheme]).addTo(map);
 // --- ÉTATS ---
 let isEditorMode = false;
 let autoCenter = true;
+let snapEnabled = true;
+let shiftPressed = false;
 let currentDraftPoints = [];
 let zonesGroup = L.featureGroup().addTo(map);
 let tempLines = L.polyline([], {color: '#00ffff', weight: 4, interactive: false}).addTo(map);
@@ -34,22 +34,20 @@ let ghostCursor = L.circleMarker([0,0], {radius: 7, color: '#ff00ff', fillOpacit
 const cursorEl = document.getElementById('custom-cursor');
 const dotEl = document.getElementById('cursor-dot');
 
-// --- GPS ET SYNC ---
+// --- GPS ET CENTRAGE ---
 let lastSync = 0;
-
 function updateGPS(pos) {
     const coords = [pos.coords.latitude, pos.coords.longitude];
+    myMarker.setLatLng(coords);
     
-    // UI Update
     document.getElementById('status-text').innerText = "LIVE";
     document.getElementById('dot').classList.add('online');
-    
-    myMarker.setLatLng(coords);
+
     if (autoCenter) {
-        map.setView(coords, map.getZoom(), { animate: true });
+        // Utilisation de setView avec {animate: true} pour un suivi fluide
+        map.setView(coords, map.getZoom(), { animate: true, pan: { duration: 1 } });
     }
 
-    // Sync Firebase toutes les 5s
     const now = Date.now();
     if (now - lastSync > 5000) {
         db.ref('joueurs/' + playerId).set({ lat: coords[0], lng: coords[1], lastSeen: now });
@@ -58,17 +56,13 @@ function updateGPS(pos) {
 }
 
 if ("geolocation" in navigator) {
-    navigator.geolocation.watchPosition(updateGPS, 
-        (err) => { document.getElementById('status-text').innerText = "Erreur GPS"; },
-        { enableHighAccuracy: true, maximumAge: 0 }
-    );
+    navigator.geolocation.watchPosition(updateGPS, null, { enableHighAccuracy: true });
 }
 
-// --- MAGNÉTISME ---
+// --- MOTEUR DE MAGNÉTISME (ANGLES > SEGMENTS) ---
 window.addEventListener('mousemove', (e) => {
     if (!isEditorMode) return;
 
-    // Déplacer le viseur
     cursorEl.style.left = e.clientX + 'px';
     cursorEl.style.top = e.clientY + 'px';
 
@@ -77,98 +71,118 @@ window.addEventListener('mousemove', (e) => {
     
     let bestLatLng = mouseLatLng;
     let snapType = "none";
-    let minDistance = 40; // Seuil de 40 pixels
+    
+    // Si l'aimant est activé (bouton + pas de touche Maj enfoncée)
+    if (snapEnabled && !shiftPressed) {
+        let minDistance = 40; // Rayon d'attraction en pixels
 
-    // 1. Scan des angles (Angles des zones existantes + points du draft)
-    let pointsToScan = [];
-    zonesGroup.eachLayer(layer => {
-        if (layer instanceof L.Polygon) pointsToScan = pointsToScan.concat(layer.getLatLngs()[0]);
-    });
-    currentDraftPoints.forEach(p => pointsToScan.push(L.latLng(p[0], p[1])));
-
-    pointsToScan.forEach(latLng => {
-        let dist = mousePoint.distanceTo(map.latLngToLayerPoint(latLng));
-        if (dist < minDistance) {
-            minDistance = dist;
-            bestLatLng = latLng;
-            snapType = "angle";
-        }
-    });
-
-    // 2. Scan des segments (si pas d'angle)
-    if (snapType === "none") {
+        // 1. SCAN DES ANGLES (PRIORITÉ HAUTE)
+        let angles = [];
         zonesGroup.eachLayer(layer => {
-            if (layer instanceof L.Polygon) {
-                const snapped = turf.nearestPointOnLine(layer.toGeoJSON(), turf.point([mouseLatLng.lng, mouseLatLng.lat]), {units: 'meters'});
-                const snappedLatLng = L.latLng(snapped.geometry.coordinates[1], snapped.geometry.coordinates[0]);
-                let dist = mousePoint.distanceTo(map.latLngToLayerPoint(snappedLatLng));
-                if (dist < 30) { // Un peu moins que les angles pour donner priorité aux angles
-                    bestLatLng = snappedLatLng;
-                    snapType = "segment";
-                }
+            if (layer instanceof L.Polygon) angles = angles.concat(layer.getLatLngs()[0]);
+        });
+        currentDraftPoints.forEach(p => angles.push(L.latLng(p[0], p[1])));
+
+        angles.forEach(latLng => {
+            let dist = mousePoint.distanceTo(map.latLngToLayerPoint(latLng));
+            if (dist < minDistance) {
+                minDistance = dist;
+                bestLatLng = latLng;
+                snapType = "angle";
             }
         });
+
+        // 2. SCAN DES SEGMENTS (SI PAS D'ANGLE TROUVÉ)
+        if (snapType === "none") {
+            zonesGroup.eachLayer(layer => {
+                if (layer instanceof L.Polygon) {
+                    const snapped = turf.nearestPointOnLine(layer.toGeoJSON(), turf.point([mouseLatLng.lng, mouseLatLng.lat]), {units: 'meters'});
+                    const snappedLatLng = L.latLng(snapped.geometry.coordinates[1], snapped.geometry.coordinates[0]);
+                    let dist = mousePoint.distanceTo(map.latLngToLayerPoint(snappedLatLng));
+                    if (dist < 30) {
+                        bestLatLng = snappedLatLng;
+                        snapType = "segment";
+                    }
+                }
+            });
+        }
     }
 
-    // Update Visuelle
     ghostCursor.setLatLng(bestLatLng).setStyle({ opacity: 1 });
     if (snapType === "angle") { dotEl.style.background = "#00ff00"; ghostCursor.setStyle({color: "#00ff00"}); }
     else if (snapType === "segment") { dotEl.style.background = "#00ffff"; ghostCursor.setStyle({color: "#00ffff"}); }
     else { dotEl.style.background = "#ff00ff"; ghostCursor.setStyle({color: "#ff00ff"}); }
 });
 
-// --- INTERACTIONS ---
-map.on('click', () => {
-    if (!isEditorMode) return;
-    const target = ghostCursor.getLatLng();
-    currentDraftPoints.push([target.lat, target.lng]);
-    tempLines.setLatLngs(currentDraftPoints);
+// --- CLAVIER ET RACCOURCIS ---
+window.addEventListener('keydown', (e) => {
+    if (e.key === "Shift") shiftPressed = true;
+    if (e.key.toLowerCase() === 'e') toggleMode();
+    if (e.key.toLowerCase() === 'm') toggleSnap();
+    
+    if (isEditorMode) {
+        if (e.key === 'Enter') exportZone();
+        if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            currentDraftPoints.pop();
+            tempLines.setLatLngs(currentDraftPoints);
+        }
+    }
+});
+
+window.addEventListener('keyup', (e) => {
+    if (e.key === "Shift") shiftPressed = false;
+});
+
+// --- UI FUNCTIONS ---
+function toggleSnap() {
+    snapEnabled = !snapEnabled;
+    const btn = document.getElementById('btn-snap');
+    btn.classList.toggle('disabled', !snapEnabled);
+    btn.innerText = snapEnabled ? "Aimant [M]" : "Aimant OFF";
+}
+
+function enableAutoCenter() {
+    autoCenter = true;
+    document.getElementById('btn-center').classList.add('active');
+    // Forcer le recentrage immédiat si on a déjà une position
+    if (myMarker.getLatLng()) map.panTo(myMarker.getLatLng());
+}
+
+map.on('movestart', (e) => {
+    // Si le mouvement ne vient pas du code (hard: true), on coupe le centrage
+    if (!e.hard) {
+        autoCenter = false;
+        document.getElementById('btn-center').classList.remove('active');
+    }
 });
 
 function toggleMode() {
     isEditorMode = !isEditorMode;
     document.getElementById('btn-toggle').classList.toggle('active', isEditorMode);
     document.getElementById('btn-save').style.display = isEditorMode ? "block" : "none";
-    
-    if (isEditorMode) {
-        document.body.classList.add('editor-active');
-        cursorEl.style.display = 'block';
-    } else {
-        document.body.classList.remove('editor-active');
-        cursorEl.style.display = 'none';
-        clearDraft();
+    document.body.classList.toggle('editor-active', isEditorMode);
+    cursorEl.style.display = isEditorMode ? 'block' : 'none';
+    if (!isEditorMode) {
+        currentDraftPoints = [];
+        tempLines.setLatLngs([]);
     }
 }
 
 function exportZone() {
     if (currentDraftPoints.length < 3) return;
     const poly = L.polygon(currentDraftPoints, {color: '#ffcc00', fillOpacity: 0.4, weight: 3}).addTo(zonesGroup);
-    
     poly.on('contextmenu', (e) => {
         L.DomEvent.stopPropagation(e);
         if (confirm("Supprimer cette zone ?")) zonesGroup.removeLayer(poly);
     });
-
-    console.log("ZONE:", JSON.stringify(currentDraftPoints));
     currentDraftPoints = [];
     tempLines.setLatLngs([]);
 }
 
-function enableAutoCenter() {
-    autoCenter = true;
-    document.getElementById('btn-center').classList.add('active');
-}
-
-map.on('movestart', (e) => { if (!e.hard) { autoCenter = false; document.getElementById('btn-center').classList.remove('active'); } });
-
-// Raccourcis clavier
-window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'e') toggleMode();
+map.on('click', () => {
     if (!isEditorMode) return;
-    if (e.key === 'Enter') exportZone();
-    if (e.ctrlKey && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        currentDraftPoints.pop();
-        tempLines.setLatLngs(currentDraftPoints);
-    }
+    const target = ghostCursor.getLatLng();
+    currentDraftPoints.push([target.lat, target.lng]);
+    tempLines.setLatLngs(currentDraftPoints);
 });
