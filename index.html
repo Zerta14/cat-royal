@@ -3,28 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>CatRoyal - Vincennes 🐾</title>
+    <title>CatRoyal - Vincennes</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        body { margin: 0; padding: 0; background: #1a1a1a; color: white; font-family: sans-serif; }
-        #map { height: 100vh; width: 100vw; }
-        #ui-overlay {
-            position: absolute; top: 10px; left: 10px; z-index: 1000;
-            background: rgba(0, 0, 0, 0.85); padding: 15px; border-radius: 12px;
-            border: 2px solid #ffcc00; width: 200px;
-        }
-        .hp-bar { background: #444; height: 10px; width: 100%; border-radius: 5px; margin-top: 5px; }
-        #hp-fill { background: #00ff00; height: 100%; width: 100%; border-radius: 5px; transition: width 0.3s; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <div id="ui-overlay">
-        <h2 style="margin:0; color:#ffcc00; font-size: 18px;">CatRoyal</h2>
-        <div id="status">Vincennes - En attente</div>
-        <div id="zone-name" style="font-size: 12px; color: #aaa;">Zone : Hors-jeu</div>
-        <div class="hp-bar"><div id="hp-fill"></div></div>
+        <h2 id="game-title">CatRoyal 🐾</h2>
+        <div id="status-bar">
+            <span id="dot" class="status-dot"></span>
+            <span id="status-text">Initialisation...</span>
+        </div>
+        <div id="zone-info">Zone : <span id="current-zone-name">Hors-jeu</span></div>
+        <div class="hp-container">
+            <div id="hp-fill"></div>
+        </div>
+        <small id="player-display-id"></small>
+    </div>
+
+    <div id="editor-controls">
+        <button id="btn-toggle" class="btn-editor" onclick="toggleMode()">Mode : JEU</button>
+        <button id="btn-save" class="btn-editor" onclick="exportZone()" style="display:none;">GÉNÉRER ZONE</button>
+        <button id="btn-clear" class="btn-editor" onclick="clearDraft()" style="display:none;">EFFACER</button>
     </div>
 
     <div id="map"></div>
@@ -33,164 +35,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-
-    <script>
-        // 1. TA CONFIG FIREBASE
-        const firebaseConfig = {
-            apiKey: "AIzaSyBB1Ly4gEo0jZakLo1ZWtaKz9-HriOy-CM",
-            authDomain: "cat-royal.firebaseapp.com",
-            projectId: "cat-royal",
-            storageBucket: "cat-royal.firebasestorage.app",
-            messagingSenderId: "526911138487",
-            appId: "1:526911138487:web:6e3db2db2a561df0007b32",
-            databaseURL: "https://cat-royal-default-rtdb.europe-west1.firebasedatabase.app/"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-        const playerId = "Player_" + Math.floor(Math.random() * 999);
-
-        // 2. CONFIGURATION DE LA CARTE (Centrée sur Vincennes)
-        const map = L.map('map', {
-            center: [48.8475, 2.4390],
-            zoom: 17,
-            minZoom: 15,
-            maxBounds: [[48.830, 2.410], [48.865, 2.465]] // Bloque la vue sur Vincennes
-        });
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-
-        // 3. DÉFINITION DES ZONES (Polygones)
-        // Les coordonnées sont des [Latitude, Longitude]
-        const quartiers = {
-            "Zone_A": {
-                coords: [
-                    [48.847075, 2.439237], [48.847271, 2.434679], 
-                    [48.846567, 2.434655], [48.846382, 2.436721], 
-                    [48.845874, 2.438996]
-                ],
-                color: "#ffcc00",
-                isDead: false
-            },
-            "Zone_B": {
-                coords: [
-                    [48.846565, 2.434653], [48.844967, 2.434563], 
-                    [48.844829, 2.436420], [48.844665, 2.438759], 
-                    [48.845872, 2.439000], [48.846379, 2.436741]
-                ],
-                color: "#00ff00",
-                isDead: false
-            },
-            "Zone_C": {
-                coords: [
-                    [48.845175, 2.432149], [48.844974, 2.434568], 
-                    [48.847106, 2.434681], [48.847170, 2.433041], 
-                    [48.845778, 2.432253]
-                ],
-                color: "#3388ff",
-                isDead: false
-            }
-        };
-
-        let zoneLayers = {};
-        function dessinerZones() {
-            for (let nom in quartiers) {
-                const q = quartiers[nom];
-                zoneLayers[nom] = L.polygon(q.coords, {
-                    color: q.isDead ? "red" : q.color,
-                    fillOpacity: 0.3
-                }).addTo(map);
-            }
-        }
-        dessinerZones();
-
-        // 4. LOGIQUE DE JEU ET GPS
-        let myHP = 100;
-        let myMarker = L.circleMarker([0,0], {radius: 8, color: 'white', fillColor: 'blue', fillOpacity: 1}).addTo(map);
-
-        function updateGame(lat, lng) {
-            let currentZone = "Hors-zone";
-            const userPoint = turf.point([lng, lat]); // Turf utilise [Lng, Lat]
-
-            for (let nom in quartiers) {
-                // On transforme nos coordonnées en format Turf pour le calcul
-                const poly = turf.polygon([quartiers[nom].coords.map(c => [c[1], c[0]])]);
-                
-                if (turf.booleanPointInPolygon(userPoint, poly)) {
-                    currentZone = nom;
-                    if (quartiers[nom].isDead) {
-                        myHP -= 2; // On perd de la vie si la zone est morte
-                    }
-                }
-            }
-
-            // Mise à jour de l'UI
-            document.getElementById('zone-name').innerText = "Zone : " + currentZone;
-            document.getElementById('hp-fill').style.width = myHP + "%";
-            if (myHP <= 0) document.getElementById('status').innerText = "ÉLIMINÉ 💀";
-        }
-
-        // 5. GÉOLOCALISATION
-        navigator.geolocation.watchPosition((pos) => {
-            const {latitude, longitude} = pos.coords;
-            myMarker.setLatLng([latitude, longitude]);
-            map.panTo([latitude, longitude]);
-            
-            // Envoyer à Firebase
-            db.ref('joueurs/' + playerId).set({ lat: latitude, lng: longitude });
-            
-            // Calculer les règles du jeu
-            updateGame(latitude, longitude);
-        }, null, {enableHighAccuracy: true});
-
-        // --- VARIABLES ÉDITEUR ---
-        let isEditorMode = true; // Passe à false pour jouer
-        let currentDraftPoints = [];
-        let tempLines = L.polyline([], {color: '#ffcc00'}).addTo(map);
-        let editorMarkers = [];
-
-        // Paramètre de magnétisme (en mètres)
-        const SNAP_DISTANCE = 10; 
-
-        map.on('click', function(e) {
-            if (!isEditorMode) return;
-
-            let latlng = e.latlng;
-
-            // --- LOGIQUE DE MAGNÉTISME (SNAP) ---
-            // On vérifie si un point existe déjà aux alentours pour "s'aimanter"
-            map.eachLayer((layer) => {
-                if (layer instanceof L.Marker || (layer instanceof L.CircleMarker && layer !== myMarker)) {
-                    const dist = map.distance(latlng, layer.getLatLng());
-                    if (dist < SNAP_DISTANCE) {
-                        latlng = layer.getLatLng(); // On s'aimante au point existant
-                    }
-                }
-            });
-
-            // Ajouter le point
-            currentDraftPoints.push([latlng.lat, latlng.lng]);
-            tempLines.setLatLngs(currentDraftPoints);
-            
-            // Créer un petit point visuel pour le magnétisme futur
-            let dot = L.circleMarker(latlng, {radius: 5, color: 'cyan'}).addTo(map);
-            editorMarkers.push(dot);
-        });
-
-        // FONCTION POUR TERMINER UNE ZONE
-        function finaliserZone() {
-            if (currentDraftPoints.length < 3) return;
-            
-            console.log("COORDONNÉES À COPIER :");
-            console.log(JSON.stringify(currentDraftPoints));
-            
-            // Dessiner la zone finale
-            L.polygon(currentDraftPoints, {color: 'white', fillOpacity: 0.5}).addTo(map);
-            
-            // Reset pour la zone suivante
-            currentDraftPoints = [];
-            tempLines.setLatLngs([]);
-            alert("Zone générée ! Regarde la console (F12) pour les coordonnées.");
-        }
-
-    </script>
+    
+    <script src="script.js"></script>
 </body>
 </html>
