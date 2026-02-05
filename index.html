@@ -3,49 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>CatRoyal - Live 🐾</title>
+    <title>CatRoyal - Vincennes 🐾</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
     <style>
-        body { margin: 0; padding: 0; background: #1a1a1a; }
+        body { margin: 0; padding: 0; background: #1a1a1a; color: white; font-family: sans-serif; }
         #map { height: 100vh; width: 100vw; }
         #ui-overlay {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 1000;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 15px;
-            border-radius: 12px;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            border: 2px solid #ffcc00;
+            position: absolute; top: 10px; left: 10px; z-index: 1000;
+            background: rgba(0, 0, 0, 0.85); padding: 15px; border-radius: 12px;
+            border: 2px solid #ffcc00; width: 200px;
         }
-        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; background: #ff3300; }
-        .online { background: #00ff00; }
+        .hp-bar { background: #444; height: 10px; width: 100%; border-radius: 5px; margin-top: 5px; }
+        #hp-fill { background: #00ff00; height: 100%; width: 100%; border-radius: 5px; transition: width 0.3s; }
     </style>
 </head>
 <body>
 
     <div id="ui-overlay">
-        <h2 style="margin:0; color:#ffcc00;">CatRoyal</h2>
-        <div id="status-container">
-            <span id="dot" class="status-dot"></span>
-            <span id="status">Initialisation...</span>
-        </div>
-        <small id="player-id" style="opacity: 0.6;"></small>
+        <h2 style="margin:0; color:#ffcc00; font-size: 18px;">CatRoyal</h2>
+        <div id="status">Vincennes - En attente</div>
+        <div id="zone-name" style="font-size: 12px; color: #aaa;">Zone : Hors-jeu</div>
+        <div class="hp-bar"><div id="hp-fill"></div></div>
     </div>
 
     <div id="map"></div>
 
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
     <script>
-        // 1. TA CONFIGURATION FIREBASE
+        // 1. TA CONFIG FIREBASE
         const firebaseConfig = {
             apiKey: "AIzaSyBB1Ly4gEo0jZakLo1ZWtaKz9-HriOy-CM",
             authDomain: "cat-royal.firebaseapp.com",
@@ -53,75 +43,104 @@
             storageBucket: "cat-royal.firebasestorage.app",
             messagingSenderId: "526911138487",
             appId: "1:526911138487:web:6e3db2db2a561df0007b32",
-            databaseURL: "https://cat-royal-default-rtdb.europe-west1.firebasedatabase.app/" // Note: Vérifie cette URL dans ta console Firebase
+            databaseURL: "https://cat-royal-default-rtdb.europe-west1.firebasedatabase.app/"
         };
-
-        // Initialisation Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-
-        // Génération d'un ID unique pour toi
         const playerId = "Player_" + Math.floor(Math.random() * 999);
-        document.getElementById('player-id').innerText = "ID: " + playerId;
 
-        // 2. INITIALISATION DE LA CARTE
-        const map = L.map('map').setView([48.8566, 2.3522], 13);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '©OpenStreetMap'
-        }).addTo(map);
-
-        let markers = {}; 
-
-        // 3. ÉCOUTER LES AUTRES JOUEURS
-        db.ref('joueurs').on('value', (snapshot) => {
-            const data = snapshot.val();
-            if (!data) return;
-
-            for (let id in data) {
-                const p = data[id];
-                if (id === playerId) continue; // Ne pas dessiner son propre double
-
-                if (!markers[id]) {
-                    markers[id] = L.marker([p.lat, p.lng]).addTo(map).bindPopup(id);
-                } else {
-                    markers[id].setLatLng([p.lat, p.lng]);
-                }
-            }
+        // 2. CONFIGURATION DE LA CARTE (Centrée sur Vincennes)
+        const map = L.map('map', {
+            center: [48.8475, 2.4390],
+            zoom: 17,
+            minZoom: 15,
+            maxBounds: [[48.830, 2.410], [48.865, 2.465]] // Bloque la vue sur Vincennes
         });
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-        // 4. TA GÉOLOCALISATION
-        let myMarker = L.circleMarker([0, 0], { color: '#ffcc00', radius: 10 }).addTo(map).bindPopup("Moi");
+        // 3. DÉFINITION DES ZONES (Polygones)
+        // Les coordonnées sont des [Latitude, Longitude]
+        const quartiers = {
+            "Zone_A": {
+                coords: [
+                    [48.847075, 2.439237], [48.847271, 2.434679], 
+                    [48.846567, 2.434655], [48.846382, 2.436721], 
+                    [48.845874, 2.438996]
+                ],
+                color: "#ffcc00",
+                isDead: false
+            },
+            "Zone_B": {
+                coords: [
+                    [48.846565, 2.434653], [48.844967, 2.434563], 
+                    [48.844829, 2.436420], [48.844665, 2.438759], 
+                    [48.845872, 2.439000], [48.846379, 2.436741]
+                ],
+                color: "#00ff00",
+                isDead: false
+            },
+            "Zone_C": {
+                coords: [
+                    [48.845175, 2.432149], [48.844974, 2.434568], 
+                    [48.847106, 2.434681], [48.847170, 2.433041], 
+                    [48.845778, 2.432253]
+                ],
+                color: "#3388ff",
+                isDead: false
+            }
+        };
 
-        function startTracking() {
-            if ("geolocation" in navigator) {
-                navigator.geolocation.watchPosition((position) => {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-                    
-                    const newPos = [lat, lng];
-                    myMarker.setLatLng(newPos);
-                    map.setView(newPos, 17);
-
-                    // Envoyer à Firebase
-                    db.ref('joueurs/' + playerId).set({
-                        lat: lat,
-                        lng: lng,
-                        lastSeen: Date.now()
-                    });
-
-                    document.getElementById('status').innerText = "En ligne";
-                    document.getElementById('dot').classList.add('online');
-                }, (err) => {
-                    document.getElementById('status').innerText = "Erreur GPS";
-                    console.error(err);
-                }, {
-                    enableHighAccuracy: true,
-                    maximumAge: 0
-                });
+        let zoneLayers = {};
+        function dessinerZones() {
+            for (let nom in quartiers) {
+                const q = quartiers[nom];
+                zoneLayers[nom] = L.polygon(q.coords, {
+                    color: q.isDead ? "red" : q.color,
+                    fillOpacity: 0.3
+                }).addTo(map);
             }
         }
+        dessinerZones();
 
-        startTracking();
+        // 4. LOGIQUE DE JEU ET GPS
+        let myHP = 100;
+        let myMarker = L.circleMarker([0,0], {radius: 8, color: 'white', fillColor: 'blue', fillOpacity: 1}).addTo(map);
+
+        function updateGame(lat, lng) {
+            let currentZone = "Hors-zone";
+            const userPoint = turf.point([lng, lat]); // Turf utilise [Lng, Lat]
+
+            for (let nom in quartiers) {
+                // On transforme nos coordonnées en format Turf pour le calcul
+                const poly = turf.polygon([quartiers[nom].coords.map(c => [c[1], c[0]])]);
+                
+                if (turf.booleanPointInPolygon(userPoint, poly)) {
+                    currentZone = nom;
+                    if (quartiers[nom].isDead) {
+                        myHP -= 2; // On perd de la vie si la zone est morte
+                    }
+                }
+            }
+
+            // Mise à jour de l'UI
+            document.getElementById('zone-name').innerText = "Zone : " + currentZone;
+            document.getElementById('hp-fill').style.width = myHP + "%";
+            if (myHP <= 0) document.getElementById('status').innerText = "ÉLIMINÉ 💀";
+        }
+
+        // 5. GÉOLOCALISATION
+        navigator.geolocation.watchPosition((pos) => {
+            const {latitude, longitude} = pos.coords;
+            myMarker.setLatLng([latitude, longitude]);
+            map.panTo([latitude, longitude]);
+            
+            // Envoyer à Firebase
+            db.ref('joueurs/' + playerId).set({ lat: latitude, lng: longitude });
+            
+            // Calculer les règles du jeu
+            updateGame(latitude, longitude);
+        }, null, {enableHighAccuracy: true});
+
     </script>
 </body>
 </html>
