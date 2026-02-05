@@ -141,6 +141,56 @@
             updateGame(latitude, longitude);
         }, null, {enableHighAccuracy: true});
 
+        // --- VARIABLES ÉDITEUR ---
+        let isEditorMode = true; // Passe à false pour jouer
+        let currentDraftPoints = [];
+        let tempLines = L.polyline([], {color: '#ffcc00'}).addTo(map);
+        let editorMarkers = [];
+
+        // Paramètre de magnétisme (en mètres)
+        const SNAP_DISTANCE = 10; 
+
+        map.on('click', function(e) {
+            if (!isEditorMode) return;
+
+            let latlng = e.latlng;
+
+            // --- LOGIQUE DE MAGNÉTISME (SNAP) ---
+            // On vérifie si un point existe déjà aux alentours pour "s'aimanter"
+            map.eachLayer((layer) => {
+                if (layer instanceof L.Marker || (layer instanceof L.CircleMarker && layer !== myMarker)) {
+                    const dist = map.distance(latlng, layer.getLatLng());
+                    if (dist < SNAP_DISTANCE) {
+                        latlng = layer.getLatLng(); // On s'aimante au point existant
+                    }
+                }
+            });
+
+            // Ajouter le point
+            currentDraftPoints.push([latlng.lat, latlng.lng]);
+            tempLines.setLatLngs(currentDraftPoints);
+            
+            // Créer un petit point visuel pour le magnétisme futur
+            let dot = L.circleMarker(latlng, {radius: 5, color: 'cyan'}).addTo(map);
+            editorMarkers.push(dot);
+        });
+
+        // FONCTION POUR TERMINER UNE ZONE
+        function finaliserZone() {
+            if (currentDraftPoints.length < 3) return;
+            
+            console.log("COORDONNÉES À COPIER :");
+            console.log(JSON.stringify(currentDraftPoints));
+            
+            // Dessiner la zone finale
+            L.polygon(currentDraftPoints, {color: 'white', fillOpacity: 0.5}).addTo(map);
+            
+            // Reset pour la zone suivante
+            currentDraftPoints = [];
+            tempLines.setLatLngs([]);
+            alert("Zone générée ! Regarde la console (F12) pour les coordonnées.");
+        }
+
     </script>
 </body>
 </html>
