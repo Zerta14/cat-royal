@@ -1,173 +1,105 @@
-// --- VARIABLES ET ÉTATS ---
-let isEditorMode = false;
-let autoCenter = true;
-let snapEnabled = true;
-let shiftPressed = false;
-let currentDraftPoints = [];
-let zonesGroup = L.featureGroup().addTo(map);
+// --- INITIALISATION DES COUCHES ---
+const editorLayer = L.layerGroup(); // Conteneur global du mode éditeur
+const zonesGroup = L.featureGroup().addTo(map); // Les zones finies (toujours visibles)
 
-// Groupe pour afficher les points (noeuds) du tracé en cours
-let draftMarkers = L.layerGroup().addTo(map); 
-let tempLines = L.polyline([], {color: '#00ffff', weight: 4, interactive: false}).addTo(map);
-
-let myMarker = L.circleMarker([48.8475, 2.4390], {radius: 8, color: 'white', fillColor: '#007bff', fillOpacity: 1}).addTo(map);
-
-// Le curseur fantôme (le rond violet/vert/bleu)
-let ghostCursor = L.circleMarker([0,0], {
-    radius: 7, 
-    color: '#ff00ff', 
-    fillOpacity: 1, 
-    interactive: false, 
-    opacity: 0 // Caché par défaut
-}).addTo(map);
-
-const cursorEl = document.getElementById('custom-cursor');
+const tempLines = L.polyline([], {color: '#00ffff', weight: 4}).addTo(editorLayer);
+const ghostCursor = L.circleMarker([0,0], {radius: 7, color: '#ff00ff', fillOpacity: 1, opacity: 1}).addTo(editorLayer);
 const dotEl = document.getElementById('cursor-dot');
 
-// --- MOTEUR DE MAGNÉTISME RÉVISÉ ---
+// --- LE MOTEUR DE SNAP SIMPLIFIÉ ---
+function getSnapLatLng(mouseLatLng) {
+    if (!snapEnabled || shiftPressed) return mouseLatLng;
+
+    const mouseP = map.latLngToLayerPoint(mouseLatLng);
+    let bestDist = 40; // Rayon de snap
+    let bestLatLng = mouseLatLng;
+    let type = "none";
+
+    // SCAN DES POINTS (Angles / Noeuds)
+    let points = [];
+    zonesGroup.eachLayer(l => { if(l.getLatLngs) points = points.concat(l.getLatLngs()[0]); });
+    currentDraftPoints.forEach(p => points.push(L.latLng(p[0], p[1])));
+
+    points.forEach(latLng => {
+        let d = mouseP.distanceTo(map.latLngToLayerPoint(latLng));
+        if (d < bestDist) {
+            bestDist = d;
+            bestLatLng = latLng;
+            type = "angle";
+        }
+    });
+
+    // SCAN DES SEGMENTS (Si pas d'angle trouvé)
+    if (type === "none") {
+        zonesGroup.eachLayer(l => {
+            if (l instanceof L.Polygon) {
+                const latlngs = l.getLatLngs()[0];
+                for (let i = 0; i < latlngs.length; i++) {
+                    const p1 = map.latLngToLayerPoint(latlngs[i]);
+                    const p2 = map.latLngToLayerPoint(latlngs[(i + 1) % latlngs.length]);
+                    // Calcul du point le plus proche sur le segment p1-p2
+                    const closestP = L.LineUtil.closestPointOnSegment(mouseP, p1, p2);
+                    let d = mouseP.distanceTo(closestP);
+                    if (d < 30) {
+                        bestDist = d;
+                        bestLatLng = map.layerPointToLatLng(closestP);
+                        type = "segment";
+                    }
+                }
+            }
+        });
+    }
+    return { latlng: bestLatLng, type: type };
+}
+
+// --- GESTION DES ÉVÉNEMENTS ---
 window.addEventListener('mousemove', (e) => {
     if (!isEditorMode) return;
-
+    
+    // Curseur custom
+    const cursorEl = document.getElementById('custom-cursor');
     cursorEl.style.left = e.clientX + 'px';
     cursorEl.style.top = e.clientY + 'px';
 
-    const mouseLatLng = map.mouseEventToLatLng(e);
-    const mousePoint = map.latLngToLayerPoint(mouseLatLng);
-    
-    let bestLatLng = mouseLatLng;
-    let snapType = "none";
-    
-    if (snapEnabled && !shiftPressed) {
-        let minDistance = 40; 
+    const snap = getSnapLatLng(map.mouseEventToLatLng(e));
+    ghostCursor.setLatLng(snap.latlng);
 
-        // 1. SCAN DES ANGLES (Priorité 1)
-        let angles = [];
-        zonesGroup.eachLayer(layer => {
-            if (layer instanceof L.Polygon) {
-                // Leaflet stocke les points dans un tableau de tableaux pour les polygones
-                const latlngs = layer.getLatLngs()[0];
-                angles = angles.concat(latlngs);
-            }
-        });
-        // On ajoute aussi les points du tracé actuel pour pouvoir fermer le polygone
-        currentDraftPoints.forEach(p => angles.push(L.latLng(p[0], p[1])));
-
-        angles.forEach(latLng => {
-            let dist = mousePoint.distanceTo(map.latLngToLayerPoint(latLng));
-            if (dist < minDistance) {
-                minDistance = dist;
-                bestLatLng = latLng;
-                snapType = "angle";
-            }
-        });
-
-        // 2. SCAN DES SEGMENTS (Priorité 2)
-        if (snapType === "none") {
-            zonesGroup.eachLayer(layer => {
-                if (layer instanceof L.Polygon) {
-                    // On convertit le polygone en "LineString" pour que Turf puisse trouver le point le plus proche sur le bord
-                    const geojson = layer.toGeoJSON();
-                    const line = turf.polygonToLine(geojson); 
-                    
-                    const snapped = turf.nearestPointOnLine(line, turf.point([mouseLatLng.lng, mouseLatLng.lat]));
-                    const snappedLatLng = L.latLng(snapped.geometry.coordinates[1], snapped.geometry.coordinates[0]);
-                    
-                    let dist = mousePoint.distanceTo(map.latLngToLayerPoint(snappedLatLng));
-                    if (dist < 30) {
-                        bestLatLng = snappedLatLng;
-                        snapType = "segment";
-                    }
-                }
-            });
-        }
-    }
-
-    // Mise à jour visuelle du ghostCursor
-    ghostCursor.setLatLng(bestLatLng).setStyle({ opacity: 1 });
-    
-    if (snapType === "angle") { 
-        dotEl.style.background = "#00ff00"; 
-        ghostCursor.setStyle({color: "#00ff00"}); 
-    } else if (snapType === "segment") { 
-        dotEl.style.background = "#00ffff"; 
-        ghostCursor.setStyle({color: "#00ffff"}); 
-    } else { 
-        dotEl.style.background = "#ff00ff"; 
-        ghostCursor.setStyle({color: "#ff00ff"}); 
-    }
+    // Couleurs
+    const colors = { angle: "#00ff00", segment: "#00ffff", none: "#ff00ff" };
+    const color = colors[snap.type];
+    dotEl.style.background = color;
+    ghostCursor.setStyle({ color: color });
 });
 
-// --- CLIC : PLACER UN POINT ---
 map.on('click', () => {
     if (!isEditorMode) return;
     const target = ghostCursor.getLatLng();
     
     currentDraftPoints.push([target.lat, target.lng]);
-    
-    // Mise à jour de la ligne
     tempLines.setLatLngs(currentDraftPoints);
-    
-    // Rendre le point visible immédiatement (même le premier)
-    L.circleMarker(target, {
-        radius: 5,
-        color: '#ffffff',
-        fillColor: '#00ffff',
-        fillOpacity: 1,
-        interactive: false
-    }).addTo(draftMarkers);
+
+    // RENDRE LE POINT VISIBLE IMMÉDIATEMENT
+    L.circleMarker(target, { radius: 4, color: 'white', fillColor: 'cyan', fillOpacity: 1 })
+     .addTo(editorLayer);
 });
 
-// --- UI & MODES ---
+// --- SWITCH MODE ---
 function toggleMode() {
     isEditorMode = !isEditorMode;
-    
-    const btn = document.getElementById('btn-toggle');
-    btn.classList.toggle('active', isEditorMode);
-    document.getElementById('btn-save').style.display = isEditorMode ? "block" : "none";
+    document.getElementById('btn-toggle').classList.toggle('active', isEditorMode);
     document.body.classList.toggle('editor-active', isEditorMode);
-    
-    // Gestion du curseur et du ghostCursor
-    cursorEl.style.display = isEditorMode ? 'block' : 'none';
-    if (!isEditorMode) {
-        ghostCursor.setStyle({ opacity: 0 }); // Cache le rond violet
-        clearDraft();
+    document.getElementById('custom-cursor').style.display = isEditorMode ? 'block' : 'none';
+
+    if (isEditorMode) {
+        map.addLayer(editorLayer);
+    } else {
+        map.removeLayer(editorLayer);
+        // On vide tout pour la prochaine fois
+        currentDraftPoints = [];
+        tempLines.setLatLngs([]);
+        editorLayer.clearLayers();
+        // On doit remettre le ghostCursor et tempLines dans le layer vidé
+        tempLines.addTo(editorLayer);
+        ghostCursor.addTo(editorLayer);
     }
 }
-
-function clearDraft() {
-    currentDraftPoints = [];
-    tempLines.setLatLngs([]);
-    draftMarkers.clearLayers(); // Efface les petits points blancs
-}
-
-function exportZone() {
-    if (currentDraftPoints.length < 3) return;
-    
-    // Créer le polygone final
-    const poly = L.polygon(currentDraftPoints, {
-        color: '#ffcc00', 
-        fillOpacity: 0.4, 
-        weight: 3
-    }).addTo(zonesGroup);
-    
-    poly.on('contextmenu', (e) => {
-        L.DomEvent.stopPropagation(e);
-        if (confirm("Supprimer cette zone ?")) zonesGroup.removeLayer(poly);
-    });
-
-    console.log("ZONE:", JSON.stringify(currentDraftPoints));
-    clearDraft();
-}
-
-// --- GPS & CENTRAGE (Correction du blocage) ---
-function enableAutoCenter() {
-    autoCenter = true;
-    document.getElementById('btn-center').classList.add('active');
-    // On force le recentrage sur la position actuelle du marker
-    map.panTo(myMarker.getLatLng(), { animate: true });
-}
-
-map.on('dragstart', () => {
-    autoCenter = false;
-    document.getElementById('btn-center').classList.remove('active');
-});
