@@ -14,8 +14,8 @@ const map = L.map('map', { center: [48.8475, 2.4390], zoom: 17, zoomControl: fal
 const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png').addTo(map);
 
 // --- COUCHES ---
-const zonesGroup = L.featureGroup().addTo(map); // Zones définitives
-const editorGroup = L.layerGroup(); // Éléments temporaires (ghost, points, ligne)
+const zonesGroup = L.featureGroup().addTo(map);
+const editorGroup = L.layerGroup(); 
 const tempLines = L.polyline([], {color: '#00ffff', weight: 3}).addTo(editorGroup);
 const ghostCursor = L.circleMarker([0,0], {radius: 6, color: '#ff00ff', opacity: 1}).addTo(editorGroup);
 const myMarker = L.circleMarker([0,0], {radius: 8, color: 'white', fillColor: '#007bff', fillOpacity: 1}).addTo(map);
@@ -23,9 +23,10 @@ const myMarker = L.circleMarker([0,0], {radius: 8, color: 'white', fillColor: '#
 // --- ÉTATS ---
 let isEditorMode = false;
 let autoCenter = true;
+let snapEnabled = true; // État de l'aimant
 let shiftPressed = false;
 let currentDraftPoints = [];
-let draftMarkers = []; // Pour pouvoir les supprimer avec Ctrl+Z
+let draftMarkers = []; 
 
 // --- GPS ---
 navigator.geolocation.watchPosition(pos => {
@@ -36,11 +37,10 @@ navigator.geolocation.watchPosition(pos => {
     db.ref('joueurs/' + playerId).update({ lat: coords[0], lng: coords[1], lastSeen: Date.now() });
 }, null, { enableHighAccuracy: true });
 
-// --- MOTEUR DE MAGNÉTISME (SIMPLIFIÉ) ---
+// --- MOTEUR DE MAGNÉTISME ---
 window.addEventListener('mousemove', (e) => {
     if (!isEditorMode) return;
 
-    // Déplacement curseur custom
     const cursor = document.getElementById('custom-cursor');
     cursor.style.left = e.clientX + 'px';
     cursor.style.top = e.clientY + 'px';
@@ -50,10 +50,11 @@ window.addEventListener('mousemove', (e) => {
     let bestLatLng = mouseLatLng;
     let type = "none";
 
-    if (!shiftPressed) {
+    // On n'active l'aimant que si snapEnabled est vrai ET Maj n'est pas pressée
+    if (snapEnabled && !shiftPressed) {
         let bestDist = 40;
 
-        // 1. Angles (Priorité)
+        // 1. Angles
         let nodes = [];
         zonesGroup.eachLayer(z => nodes = nodes.concat(z.getLatLngs()[0]));
         currentDraftPoints.forEach(p => nodes.push(L.latLng(p[0], p[1])));
@@ -82,8 +83,9 @@ window.addEventListener('mousemove', (e) => {
 
     ghostCursor.setLatLng(bestLatLng);
     const colors = { angle: "#00ff00", segment: "#00ffff", none: "#ff00ff" };
-    ghostCursor.setStyle({ color: colors[type] });
-    document.getElementById('cursor-dot').style.background = colors[type];
+    const finalColor = (snapEnabled && !shiftPressed) ? colors[type] : colors["none"];
+    ghostCursor.setStyle({ color: finalColor });
+    document.getElementById('cursor-dot').style.background = finalColor;
 });
 
 // --- ACTIONS ---
@@ -91,12 +93,19 @@ map.on('click', () => {
     if (!isEditorMode) return;
     const pos = ghostCursor.getLatLng();
     currentDraftPoints.push([pos.lat, pos.lng]);
-    
-    // Mise à jour visuelle
     tempLines.setLatLngs(currentDraftPoints);
     const m = L.circleMarker(pos, {radius: 4, color: 'white', fillColor: 'cyan', fillOpacity: 1}).addTo(editorGroup);
     draftMarkers.push(m);
 });
+
+function toggleSnap() {
+    snapEnabled = !snapEnabled;
+    const btn = document.getElementById('btn-snap');
+    if (btn) {
+        btn.classList.toggle('disabled', !snapEnabled);
+        btn.innerText = snapEnabled ? "Aimant [M]" : "Aimant OFF";
+    }
+}
 
 function exportZone() {
     if (currentDraftPoints.length < 3) return;
@@ -131,6 +140,7 @@ window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     if (e.key === "Shift") shiftPressed = true;
     if (key === 'e') toggleMode();
+    if (key === 'm') toggleSnap(); // Raccourci M ajouté
     
     if (isEditorMode) {
         if (e.key === 'Enter') exportZone();
