@@ -1,45 +1,109 @@
-body { margin: 0; padding: 0; background: #121212; font-family: sans-serif; overflow: hidden; }
-#map { height: 100vh; width: 100vw; z-index: 1; }
-
-#ui-overlay {
-    position: absolute; top: 15px; left: 15px; z-index: 1000;
-    background: rgba(15, 15, 15, 0.9); color: white; padding: 15px;
-    border-radius: 12px; border: 2px solid #ffcc00; width: 180px;
+body {
+    margin: 0;
+    padding: 0;
+    background: #121212;
+    font-family: sans-serif;
+    overflow: hidden;
 }
 
-#game-title { margin: 0; color: #ffcc00; font-size: 18px; text-transform: uppercase; }
-.status-dot { height: 8px; width: 8px; background: #ff3300; border-radius: 50%; display: inline-block; }
-.online { background: #00ff00; }
-.hp-container { background: #333; height: 8px; width: 100%; border-radius: 4px; margin-top: 10px; }
-#hp-fill { background: #00ff00; height: 100%; width: 100%; transition: 0.3s; }
-#controls-hint { font-size: 10px; margin-top: 5px; color: #888; }
+#map {
+    height: 100vh;
+    width: 100vw;
+    z-index: 1;
+}
+
+#ui-overlay {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    z-index: 1000;
+    background: rgba(15, 15, 15, 0.9);
+    color: white;
+    padding: 15px;
+    border-radius: 12px;
+    border: 2px solid #ffcc00;
+    width: 180px;
+}
+
+#game-title {
+    margin: 0;
+    color: #ffcc00;
+    font-size: 18px;
+    text-transform: uppercase;
+}
+
+.status-dot {
+    height: 8px;
+    width: 8px;
+    background: #ff3300;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.online {
+    background: #00ff00;
+}
+
+.hp-container {
+    background: #333;
+    height: 8px;
+    width: 100%;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+#hp-fill {
+    background: #00ff00;
+    height: 100%;
+    width: 100%;
+    transition: 0.3s;
+}
+
+#controls-hint {
+    font-size: 10px;
+    margin-top: 5px;
+    color: #888;
+}
 
 #editor-controls {
-    position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-    z-index: 1000; display: flex; gap: 8px; background: rgba(0, 0, 0, 0.8);
-    padding: 10px; border-radius: 50px; border: 1px solid #333;
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: flex;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 10px;
+    border-radius: 50px;
+    border: 1px solid #333;
 }
 
 .btn-editor {
-    padding: 8px 15px; border: none; border-radius: 20px;
-    font-weight: bold; cursor: pointer; font-size: 11px;
-    background: #333; color: white; transition: 0.2s;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 11px;
+    background: #333;
+    color: white;
+    transition: 0.2s;
 }
 
-/* La classe magique pour cacher proprement */
-.hidden { display: none !important; }
-
-/* Classe jaune pour l'activation */
-.btn-editor.active { 
-    background: #ffcc00 !important; 
-    color: black !important; 
+#btn-toggle.active {
+    background: #ffcc00;
+    color: black;
 }
 
-/* Bouton centrer reste bleu */
-#btn-center.active { background: #007bff !important; color: white !important; }
+#btn-center.active {
+    background: #007bff;
+    color: white;
+}
 
-/* On force la disparition du curseur sur TOUS les éléments de la map */
-.editor-active, .editor-active .leaflet-container, .editor-active .leaflet-interactive {
+.editor-active,
+.editor-active .leaflet-container,
+.editor-active .leaflet-interactive {
     cursor: none !important;
 }
 
@@ -48,7 +112,7 @@ body { margin: 0; padding: 0; background: #121212; font-family: sans-serif; over
     width: 24px;
     height: 24px;
     pointer-events: none;
-    z-index: 10000; /* Au-dessus de tout */
+    z-index: 10000;
     display: none;
     transform: translate(-50%, -50%);
 }
@@ -58,8 +122,6 @@ body { margin: 0; padding: 0; background: #121212; font-family: sans-serif; over
     height: 6px;
     background: #ff00ff;
     border-radius: 50%;
-    margin: 9px auto; /* Centre le point dans les 24px */
-    box-shadow: 0 0 5px rgba(0,0,0,0.5);
+    margin: 9px auto;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
 }
-
-#btn-snap.disabled { background: #ff4444; color: white; }

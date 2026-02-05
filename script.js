@@ -3,7 +3,7 @@ const firebaseConfig = {
     apiKey: "AIzaSyBB1Ly4gEo0jZakLo1ZWtaKz9-HriOy-CM",
     authDomain: "cat-royal.firebaseapp.com",
     projectId: "cat-royal",
-    databaseURL: "https://cat-royal-default-rtdb.europe-west1.firebasedatabase.app/" 
+    databaseURL: "https://cat-royal-default-rtdb.europe-west1.firebasedatabase.app/"
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
@@ -11,22 +11,21 @@ const playerId = "Player_" + Math.floor(Math.random() * 999);
 
 // --- SETUP CARTE ---
 const map = L.map('map', { center: [48.8475, 2.4390], zoom: 17, zoomControl: false });
-const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png').addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png').addTo(map);
 
 // --- COUCHES ---
 const zonesGroup = L.featureGroup().addTo(map);
-const editorGroup = L.layerGroup(); 
-const tempLines = L.polyline([], {color: '#00ffff', weight: 3}).addTo(editorGroup);
-const ghostCursor = L.circleMarker([0,0], {radius: 6, color: '#ff00ff', opacity: 1}).addTo(editorGroup);
-const myMarker = L.circleMarker([0,0], {radius: 8, color: 'white', fillColor: '#007bff', fillOpacity: 1}).addTo(map);
+const editorGroup = L.layerGroup();
+const tempLines = L.polyline([], { color: '#00ffff', weight: 3 }).addTo(editorGroup);
+const ghostCursor = L.circleMarker([0, 0], { radius: 6, color: '#ff00ff', opacity: 1 }).addTo(editorGroup);
+const myMarker = L.circleMarker([0, 0], { radius: 8, color: 'white', fillColor: '#007bff', fillOpacity: 1 }).addTo(map);
 
 // --- ÉTATS ---
 let isEditorMode = false;
 let autoCenter = true;
-let snapEnabled = true; // État de l'aimant
 let shiftPressed = false;
 let currentDraftPoints = [];
-let draftMarkers = []; 
+let draftMarkers = [];
 
 // --- GPS ---
 navigator.geolocation.watchPosition(pos => {
@@ -34,6 +33,7 @@ navigator.geolocation.watchPosition(pos => {
     myMarker.setLatLng(coords);
     if (autoCenter) map.setView(coords, map.getZoom(), { animate: true });
     document.getElementById('status-text').innerText = "LIVE";
+    document.getElementById('dot').classList.add('online');
     db.ref('joueurs/' + playerId).update({ lat: coords[0], lng: coords[1], lastSeen: Date.now() });
 }, null, { enableHighAccuracy: true });
 
@@ -50,11 +50,8 @@ window.addEventListener('mousemove', (e) => {
     let bestLatLng = mouseLatLng;
     let type = "none";
 
-    // On n'active l'aimant que si snapEnabled est vrai ET Maj n'est pas pressée
-    if (snapEnabled && !shiftPressed) {
+    if (!shiftPressed) {
         let bestDist = 40;
-
-        // 1. Angles
         let nodes = [];
         zonesGroup.eachLayer(z => nodes = nodes.concat(z.getLatLngs()[0]));
         currentDraftPoints.forEach(p => nodes.push(L.latLng(p[0], p[1])));
@@ -64,7 +61,6 @@ window.addEventListener('mousemove', (e) => {
             if (d < bestDist) { bestDist = d; bestLatLng = node; type = "angle"; }
         });
 
-        // 2. Segments
         if (type === "none") {
             zonesGroup.eachLayer(z => {
                 const pts = z.getLatLngs()[0];
@@ -83,7 +79,7 @@ window.addEventListener('mousemove', (e) => {
 
     ghostCursor.setLatLng(bestLatLng);
     const colors = { angle: "#00ff00", segment: "#00ffff", none: "#ff00ff" };
-    const finalColor = (snapEnabled && !shiftPressed) ? colors[type] : colors["none"];
+    const finalColor = !shiftPressed ? colors[type] : colors["none"];
     ghostCursor.setStyle({ color: finalColor });
     document.getElementById('cursor-dot').style.background = finalColor;
 });
@@ -94,23 +90,17 @@ map.on('click', () => {
     const pos = ghostCursor.getLatLng();
     currentDraftPoints.push([pos.lat, pos.lng]);
     tempLines.setLatLngs(currentDraftPoints);
-    const m = L.circleMarker(pos, {radius: 4, color: 'white', fillColor: 'cyan', fillOpacity: 1}).addTo(editorGroup);
+    const m = L.circleMarker(pos, { radius: 4, color: 'white', fillColor: 'cyan', fillOpacity: 1 }).addTo(editorGroup);
     draftMarkers.push(m);
 });
 
-function toggleSnap() {
-    snapEnabled = !snapEnabled;
-    const btn = document.getElementById('btn-snap');
-    if (btn) {
-        btn.classList.toggle('disabled', !snapEnabled);
-        btn.innerText = snapEnabled ? "Aimant [M]" : "Aimant OFF";
-    }
-}
-
 function exportZone() {
     if (currentDraftPoints.length < 3) return;
-    const poly = L.polygon(currentDraftPoints, {color: '#ffcc00', fillOpacity: 0.4}).addTo(zonesGroup);
-    poly.on('contextmenu', (e) => { L.DomEvent.stopPropagation(e); if(confirm("Supprimer ?")) zonesGroup.removeLayer(poly); });
+    const poly = L.polygon(currentDraftPoints, { color: '#ffcc00', fillOpacity: 0.4 }).addTo(zonesGroup);
+    poly.on('contextmenu', (e) => {
+        L.DomEvent.stopPropagation(e);
+        if (confirm("Supprimer ?")) zonesGroup.removeLayer(poly);
+    });
     clearEditor();
 }
 
@@ -124,9 +114,10 @@ function clearEditor() {
 function toggleMode() {
     isEditorMode = !isEditorMode;
     document.getElementById('btn-toggle').classList.toggle('active', isEditorMode);
+    document.getElementById('btn-save').style.display = isEditorMode ? 'block' : 'none';
     document.getElementById('custom-cursor').style.display = isEditorMode ? 'block' : 'none';
     document.body.classList.toggle('editor-active', isEditorMode);
-    
+
     if (isEditorMode) {
         editorGroup.addTo(map);
     } else {
@@ -140,87 +131,7 @@ window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     if (e.key === "Shift") shiftPressed = true;
     if (key === 'e') toggleMode();
-    if (key === 'm') toggleSnap(); // Raccourci M ajouté
-    
-    if (isEditorMode) {
-        if (e.key === 'Enter') exportZone();
-        if (e.ctrlKey && key === 'z') {
-            e.preventDefault();
-            currentDraftPoints.pop();
-            tempLines.setLatLngs(currentDraftPoints);
-            const lastM = draftMarkers.pop();
-            if (lastM) editorGroup.removeLayer(lastM);
-        }
-    }
-});
-window.addEventListener('keyup', (e) => { if (e.key === "Shift") shiftPressed = false; });
 
-// --- UTILS ---
-function enableAutoCenter() { autoCenter = true; map.panTo(myMarker.getLatLng()); }
-map.on('movestart', (e) => { if(!e.hard) autoCenter = false; });
-
-// --- (Début du script identique jusqu'aux fonctions d'action) ---
-
-function toggleSnap() {
-    snapEnabled = !snapEnabled;
-    const btn = document.getElementById('btn-snap');
-    if (btn) {
-        // On utilise la classe .active pour le mettre en jaune ou gris
-        btn.classList.toggle('active', snapEnabled);
-    }
-}
-
-function toggleSnap() {
-    snapEnabled = !snapEnabled;
-    const btn = document.getElementById('btn-snap');
-    if (btn) {
-        // Alterne simplement la couleur jaune/gris
-        btn.classList.toggle('active', snapEnabled);
-    }
-}
-
-function toggleMode() {
-    isEditorMode = !isEditorMode;
-    
-    const btnToggle = document.getElementById('btn-toggle');
-    const btnSnap = document.getElementById('btn-snap');
-    const btnSave = document.getElementById('btn-save');
-    const cursor = document.getElementById('custom-cursor');
-
-    // Toggle la couleur du bouton Éditeur [E]
-    btnToggle.classList.toggle('active', isEditorMode);
-    
-    // Toggle la visibilité du curseur et du corps de page
-    cursor.style.display = isEditorMode ? 'block' : 'none';
-    document.body.classList.toggle('editor-active', isEditorMode);
-    
-    if (isEditorMode) {
-        editorGroup.addTo(map);
-        // On MONTRE les boutons en enlevant la classe hidden
-        btnSnap.classList.remove('hidden');
-        btnSave.classList.remove('hidden');
-        // On s'assure que le bouton magnétisme reflète l'état actuel
-        btnSnap.classList.toggle('active', snapEnabled);
-    } else {
-        clearEditor();
-        map.removeLayer(editorGroup);
-        // On CACHE les boutons en ajoutant la classe hidden
-        btnSnap.classList.add('hidden');
-        btnSave.classList.add('hidden');
-    }
-}
-
-// Mise à jour du raccourci M pour qu'il soit plus réactif
-window.addEventListener('keydown', (e) => {
-    const key = e.key.toLowerCase();
-    if (e.key === "Shift") shiftPressed = true;
-    if (key === 'e') toggleMode();
-    
-    // On permet le toggle M uniquement quand l'éditeur est ouvert
-    if (key === 'm' && isEditorMode) {
-        toggleSnap();
-    }
-    
     if (isEditorMode) {
         if (e.key === 'Enter') exportZone();
         if (e.ctrlKey && key === 'z') {
@@ -234,3 +145,12 @@ window.addEventListener('keydown', (e) => {
         }
     }
 });
+window.addEventListener('keyup', (e) => { if (e.key === "Shift") shiftPressed = false; });
+
+// --- UTILS ---
+function enableAutoCenter() {
+    autoCenter = true;
+    document.getElementById('btn-center').classList.add('active');
+    map.panTo(myMarker.getLatLng());
+}
+map.on('movestart', (e) => { if (!e.hard) { autoCenter = false; document.getElementById('btn-center').classList.remove('active'); } });
