@@ -1,87 +1,30 @@
-body {
-    margin: 0;
-    padding: 0;
-    background: #121212;
-    font-family: 'Segoe UI', Roboto, sans-serif;
-    overflow: hidden;
-}
+body { margin: 0; padding: 0; background: #121212; font-family: sans-serif; overflow: hidden; }
+#map { height: 100vh; width: 100vw; z-index: 1; }
 
-#map {
-    height: 100vh;
-    width: 100vw;
-    z-index: 1;
-}
-
-/* Panneau d'info en haut à gauche */
 #ui-overlay {
-    position: absolute;
-    top: 15px;
-    left: 15px;
-    z-index: 1000;
-    background: rgba(20, 20, 20, 0.9);
-    color: white;
-    padding: 15px;
-    border-radius: 12px;
-    border: 2px solid #ffcc00;
-    width: 180px;
-    pointer-events: none; /* Laisse cliquer à travers sur la carte */
+    position: absolute; top: 15px; left: 15px; z-index: 1000;
+    background: rgba(15, 15, 15, 0.9); color: white; padding: 15px;
+    border-radius: 12px; border: 2px solid #ffcc00; width: 180px;
 }
 
-#game-title { margin: 0; color: #ffcc00; font-size: 20px; }
-
-.status-dot {
-    height: 8px;
-    width: 8px;
-    background: #ff3300;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 5px;
-}
-
+#game-title { margin: 0; color: #ffcc00; font-size: 18px; text-transform: uppercase; }
+.status-dot { height: 8px; width: 8px; background: #ff3300; border-radius: 50%; display: inline-block; }
 .online { background: #00ff00; }
+.hp-container { background: #333; height: 8px; width: 100%; border-radius: 4px; margin-top: 10px; }
+#hp-fill { background: #00ff00; height: 100%; width: 100%; transition: 0.3s; }
+#controls-hint { font-size: 10px; margin-top: 5px; color: #888; }
 
-/* Barre de vie */
-.hp-container {
-    background: #333;
-    height: 12px;
-    width: 100%;
-    border-radius: 6px;
-    margin-top: 10px;
-    overflow: hidden;
-}
-
-#hp-fill {
-    background: linear-gradient(90deg, #ff3300, #00ff00);
-    height: 100%;
-    width: 100%;
-    transition: width 0.5s ease;
-}
-
-/* Boutons de l'éditeur en bas */
 #editor-controls {
-    position: absolute;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1000;
-    display: flex;
-    gap: 10px;
-    background: rgba(0, 0, 0, 0.8);
-    padding: 10px;
-    border-radius: 50px;
+    position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+    z-index: 1000; display: flex; gap: 8px; background: rgba(0, 0, 0, 0.8);
+    padding: 10px; border-radius: 50px; border: 1px solid #333;
 }
 
 .btn-editor {
-    padding: 10px 18px;
-    border: none;
-    border-radius: 25px;
-    font-weight: bold;
-    cursor: pointer;
-    text-transform: uppercase;
-    font-size: 12px;
+    padding: 8px 15px; border: none; border-radius: 20px;
+    font-weight: bold; cursor: pointer; font-size: 11px;
+    background: #333; color: white; transition: 0.2s;
 }
 
-#btn-toggle { background: #444; color: white; }
-.active-mode { background: #ffcc00 !important; color: black !important; }
-#btn-save { background: #00ffff; }
-#btn-clear { background: #ff4444; color: white; }
+#btn-toggle.active { background: #ffcc00; color: black; }
+#btn-center.active { background: #007bff; }

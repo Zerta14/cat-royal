@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>CatRoyal - Vincennes</title>
-    
+    <title>CatRoyal Engine</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="style.css">
 </head>
@@ -14,19 +13,18 @@
         <h2 id="game-title">CatRoyal 🐾</h2>
         <div id="status-bar">
             <span id="dot" class="status-dot"></span>
-            <span id="status-text">Initialisation...</span>
+            <span id="status-text">GPS déconnecté</span>
         </div>
-        <div id="zone-info">Zone : <span id="current-zone-name">Hors-jeu</span></div>
-        <div class="hp-container">
-            <div id="hp-fill"></div>
-        </div>
-        <small id="player-display-id"></small>
+        <div id="zone-info">Zone : <span id="current-zone-name">---</span></div>
+        <div class="hp-container"><div id="hp-fill"></div></div>
+        <div id="controls-hint">Mode JEU</div>
     </div>
 
     <div id="editor-controls">
-        <button id="btn-toggle" class="btn-editor" onclick="toggleMode()">Mode : JEU</button>
-        <button id="btn-save" class="btn-editor" onclick="exportZone()" style="display:none;">GÉNÉRER ZONE</button>
-        <button id="btn-clear" class="btn-editor" onclick="clearDraft()" style="display:none;">EFFACER</button>
+        <button id="btn-toggle" class="btn-editor" onclick="toggleMode()">Éditeur [E]</button>
+        <button id="btn-theme" class="btn-editor" onclick="toggleTheme()">Mode Sombre</button>
+        <button id="btn-center" class="btn-editor" onclick="enableAutoCenter()">📍 Centrer</button>
+        <button id="btn-save" class="btn-editor" onclick="exportZone()" style="display:none;">Créer [Entrée]</button>
     </div>
 
     <div id="map"></div>
@@ -35,7 +33,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-    
     <script src="script.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-// --- CONFIGURATION FIREBASE ---
+// --- CONFIGURATION ---
 const firebaseConfig = {
     apiKey: "AIzaSyBB1Ly4gEo0jZakLo1ZWtaKz9-HriOy-CM",
     authDomain: "cat-royal.firebaseapp.com",
@@ -8,119 +8,144 @@ const firebaseConfig = {
     appId: "1:526911138487:web:6e3db2db2a561df0007b32",
     databaseURL: "https://cat-royal-default-rtdb.europe-west1.firebasedatabase.app/" 
 };
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const playerId = "Player_" + Math.floor(Math.random() * 999);
-document.getElementById('player-display-id').innerText = "UID: " + playerId;
 
-// --- INITIALISATION CARTE ---
-const map = L.map('map', {
-    center: [48.8475, 2.4390],
-    zoom: 17,
-    zoomControl: false // Plus propre sur mobile
-});
+// --- THEMES MAP ---
+// "Labels: false" ou "All: false" dans les options CartoDB ne suffisent pas, 
+// on utilise des tuiles "No Labels" pour garder la map ultra propre.
+const themes = {
+    dark: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+    light: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
+};
+let currentTheme = 'dark';
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+const map = L.map('map', { center: [48.8475, 2.4390], zoom: 17, zoomControl: false });
+const layerGroup = L.tileLayer(themes[currentTheme]).addTo(map);
 
-// --- VARIABLES DE JEU ---
+// --- VARIABLES ET ÉTATS ---
 let isEditorMode = false;
-let myHP = 100;
+let autoCenter = true;
 let currentDraftPoints = [];
-let tempLines = L.polyline([], {color: '#00ffff', dashArray: '5, 10'}).addTo(map);
-let snapMarkers = L.layerGroup().addTo(map);
-let zoneLayers = {};
+let tempLines = L.polyline([], {color: '#00ffff', weight: 3}).addTo(map);
+let zoneLayers = {}; 
+let ghostCursor = L.circleMarker([0,0], {radius: 6, color: '#ff00ff', fillOpacity: 1, interactive: false}).addTo(map);
+let myMarker = L.circleMarker([0,0], {radius: 8, color: 'white', fillColor: '#007bff', fillOpacity: 1}).addTo(map);
 
-// ICI : Tu colleras les zones que tu auras générées
-const quartiers = {}; 
+const SNAP_SEGMENT = 15; 
+const SNAP_ANGLE = 8;
 
-// --- FONCTIONS ÉDITEUR ---
-function toggleMode() {
-    isEditorMode = !isEditorMode;
-    const btn = document.getElementById('btn-toggle');
-    document.getElementById('btn-save').style.display = isEditorMode ? "block" : "none";
-    document.getElementById('btn-clear').style.display = isEditorMode ? "block" : "none";
-    
-    if (isEditorMode) {
-        btn.innerText = "Mode : ÉDITEUR";
-        btn.classList.add('active-mode');
-    } else {
-        btn.innerText = "Mode : JEU";
-        btn.classList.remove('active-mode');
-        clearDraft();
-    }
+// --- FONCTIONS SYSTÈME ---
+function toggleTheme() {
+    currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    layerGroup.setUrl(themes[currentTheme]);
+    document.getElementById('btn-theme').innerText = currentTheme === 'dark' ? "Mode Sombre" : "Mode Clair";
 }
 
-map.on('click', (e) => {
-    if (!isEditorMode) return;
-    
-    let coords = e.latlng;
-    let point = turf.point([coords.lng, coords.lat]);
-    let minDistance = 12; // Seuil d'aimantage en mètres
-    let snappedCoords = null;
+function toggleMode() {
+    isEditorMode = !isEditorMode;
+    document.getElementById('btn-toggle').classList.toggle('active', isEditorMode);
+    document.getElementById('btn-save').style.display = isEditorMode ? "block" : "none";
+    document.getElementById('btn-clear').style.display = isEditorMode ? "block" : "none";
+    document.getElementById('controls-hint').innerText = isEditorMode ? "E: Quitter | Entrée: Créer | Ctrl+Z: Annuler" : "Mode JEU";
+    if (!isEditorMode) clearDraft();
+}
 
-    // 1. CHERCHER LE MAGNÉTISME (SNAP)
-    // On parcourt toutes les zones déjà dessinées ET le tracé en cours
-    map.eachLayer((layer) => {
-        if ((layer instanceof L.Polygon || layer instanceof L.Polyline) && layer !== tempLines) {
-            
-            // Convertir le layer en GeoJSON pour Turf
-            const geojson = layer.toGeoJSON();
-            
-            // Trouver le point le plus proche sur le contour (segment)
-            const snapped = turf.nearestPointOnLine(geojson, point, {units: 'meters'});
-            
-            if (snapped.properties.dist < minDistance) {
-                snappedCoords = [snapped.geometry.coordinates[1], snapped.geometry.coordinates[0]];
-                minDistance = snapped.properties.dist; // On garde le plus proche si plusieurs
+function enableAutoCenter() {
+    autoCenter = true;
+    document.getElementById('btn-center').classList.add('active');
+}
+
+// Désactiver le centrage auto si l'utilisateur bouge la carte manuellement
+map.on('movestart', (e) => {
+    if (e.hard) return; // Ignore si c'est un mouvement provoqué par le code
+    autoCenter = false;
+    document.getElementById('btn-center').classList.remove('active');
+});
+
+// --- ÉDITEUR MAGNÉTIQUE ---
+map.on('mousemove', (e) => {
+    if (!isEditorMode) { ghostCursor.setStyle({opacity: 0}); return; }
+    
+    let mouseCoords = e.latlng;
+    let point = turf.point([mouseCoords.lng, mouseCoords.lat]);
+    let bestCoords = mouseCoords;
+    let foundSnap = false;
+
+    // 1. Angles
+    map.eachLayer(l => {
+        if (l instanceof L.CircleMarker && l !== myMarker && l !== ghostCursor) {
+            if (map.distance(mouseCoords, l.getLatLng()) < SNAP_ANGLE) {
+                bestCoords = l.getLatLng(); foundSnap = true; ghostCursor.setStyle({color: '#00ff00'});
             }
         }
     });
 
-    // Si on a trouvé un point proche sur une ligne, on remplace les coordonnées
-    if (snappedCoords) {
-        coords = L.latLng(snappedCoords[0], snappedCoords[1]);
+    // 2. Segments (si pas d'angle)
+    if (!foundSnap) {
+        map.eachLayer(l => {
+            if ((l instanceof L.Polygon || l instanceof L.Polyline) && l !== tempLines) {
+                const snapped = turf.nearestPointOnLine(l.toGeoJSON(), point, {units: 'meters'});
+                if (snapped.properties.dist < SNAP_SEGMENT) {
+                    bestCoords = L.latLng(snapped.geometry.coordinates[1], snapped.geometry.coordinates[0]);
+                    foundSnap = true; ghostCursor.setStyle({color: '#00ffff'});
+                }
+            }
+        });
     }
 
-    // 2. AJOUTER LE POINT
+    ghostCursor.setStyle({opacity: foundSnap ? 1 : 0.5}).setLatLng(bestCoords);
+});
+
+map.on('click', (e) => {
+    if (!isEditorMode) return;
+    const coords = ghostCursor.getLatLng();
     currentDraftPoints.push([coords.lat, coords.lng]);
     tempLines.setLatLngs(currentDraftPoints);
+    L.circleMarker(coords, {radius: 4, color: '#ffffff', interactive: false}).addTo(tempLines); // Marqueur de noeud
+});
+
+// --- RACCOURCIS CLAVIER ---
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'e' || e.key === 'E') toggleMode();
+    if (!isEditorMode) return;
     
-    // Petit indicateur visuel
-    L.circleMarker(coords, {
-        radius: 4, 
-        color: snappedCoords ? '#00ff00' : '#00ffff', // Vert si aimanté
-        fillOpacity: 1
-    }).addTo(snapMarkers);
+    if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        currentDraftPoints.pop();
+        tempLines.setLatLngs(currentDraftPoints);
+    }
+    if (e.key === 'Enter') exportZone();
 });
 
 function exportZone() {
     if (currentDraftPoints.length < 3) return;
-    console.log("COORDONNÉES :", JSON.stringify(currentDraftPoints));
-    L.polygon(currentDraftPoints, {color: '#ffcc00', fillOpacity: 0.3}).addTo(map);
-    alert("Zone exportée en console !");
+    const id = "Zone_" + Date.now();
+    const poly = L.polygon(currentDraftPoints, {color: '#ffcc00', fillOpacity: 0.4}).addTo(map);
+    
+    // Ajout menu contextuel pour supprimer au clic droit
+    poly.on('contextmenu', () => {
+        if (confirm("Supprimer cette zone ?")) map.removeLayer(poly);
+    });
+
+    console.log("ZONE:", JSON.stringify(currentDraftPoints));
     clearDraft();
 }
 
 function clearDraft() {
     currentDraftPoints = [];
     tempLines.setLatLngs([]);
-    snapMarkers.clearLayers();
+    tempLines.eachLayer(l => map.removeLayer(l)); // Nettoie les points d'appui
 }
 
-// --- LOGIQUE GPS ---
-let myMarker = L.circleMarker([0,0], {radius: 8, color: 'white', fillColor: '#007bff', fillOpacity: 1}).addTo(map);
-
+// --- GPS ---
 navigator.geolocation.watchPosition((pos) => {
-    const {latitude, longitude} = pos.coords;
-    const newPos = [latitude, longitude];
-    
-    myMarker.setLatLng(newPos);
-    if (!isEditorMode) map.panTo(newPos);
-
-    // Sync Firebase
-    db.ref('joueurs/' + playerId).set({ lat: latitude, lng: longitude });
+    const coords = [pos.coords.latitude, pos.coords.longitude];
+    myMarker.setLatLng(coords);
+    if (autoCenter) map.setView(coords, 18, { animate: true });
     
     document.getElementById('status-text').innerText = "En ligne";
     document.getElementById('dot').classList.add('online');
+    db.ref('joueurs/' + playerId).set({ lat: coords[0], lng: coords[1] });
 }, null, {enableHighAccuracy: true});
