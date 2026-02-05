@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>CatRoyal - Le Jeu</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { height: 100vh; width: 100vw; }
+        #ui-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 8px;
+            font-family: sans-serif;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-overlay">
+        <h2 style="margin:0">CatRoyal 🐾</h2>
+        <p id="status">Récupération du GPS...</p>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // 1. Initialisation de la carte (vue par défaut sur la France)
+        const map = L.map('map').setView([46.603354, 1.888334], 6);
+
+        // 2. Ajout des tuiles (le dessin de la carte)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // 3. Création du marqueur joueur
+        let playerMarker = L.marker([0, 0]).addTo(map).bindPopup("Moi");
+
+        // 4. Fonction de géolocalisation
+        function updateLocation() {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.watchPosition((position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    
+                    const newPos = [lat, lng];
+                    playerMarker.setLatLng(newPos);
+                    map.setView(newPos, 17); // Zoom sur le joueur
+                    
+                    document.getElementById('status').innerText = "En ligne 🟢";
+                    console.log("Position mise à jour :", lat, lng);
+                }, (error) => {
+                    document.getElementById('status').innerText = "Erreur GPS 🔴";
+                    console.error(error);
+                }, {
+                    enableHighAccuracy: true,
+                    maximumAge: 0
+                });
+            } else {
+                alert("Ton navigateur ne supporte pas la géolocalisation.");
+            }
+        }
+
+        updateLocation();
+    </script>
+</body>
+</html>
