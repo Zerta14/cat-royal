@@ -23,8 +23,6 @@ const myMarker = L.circleMarker([0,0], {radius: 8, color: 'white', fillColor: '#
 // --- ÉTATS ---
 let isEditorMode = false;
 let autoCenter = true;
-let snapEnabled = true; // État de l'aimant
-let shiftPressed = false;
 let currentDraftPoints = [];
 let draftMarkers = []; 
 
@@ -37,7 +35,7 @@ navigator.geolocation.watchPosition(pos => {
     db.ref('joueurs/' + playerId).update({ lat: coords[0], lng: coords[1], lastSeen: Date.now() });
 }, null, { enableHighAccuracy: true });
 
-// --- MOTEUR DE MAGNÉTISME ---
+// --- MOUSE MOVE (SANS MAGNÉTISME) ---
 window.addEventListener('mousemove', (e) => {
     if (!isEditorMode) return;
 
@@ -46,46 +44,9 @@ window.addEventListener('mousemove', (e) => {
     cursor.style.top = e.clientY + 'px';
 
     const mouseLatLng = map.mouseEventToLatLng(e);
-    const mouseP = map.latLngToLayerPoint(mouseLatLng);
-    let bestLatLng = mouseLatLng;
-    let type = "none";
-
-    // On n'active l'aimant que si snapEnabled est vrai ET Maj n'est pas pressée
-    if (snapEnabled && !shiftPressed) {
-        let bestDist = 40;
-
-        // 1. Angles
-        let nodes = [];
-        zonesGroup.eachLayer(z => nodes = nodes.concat(z.getLatLngs()[0]));
-        currentDraftPoints.forEach(p => nodes.push(L.latLng(p[0], p[1])));
-
-        nodes.forEach(node => {
-            let d = mouseP.distanceTo(map.latLngToLayerPoint(node));
-            if (d < bestDist) { bestDist = d; bestLatLng = node; type = "angle"; }
-        });
-
-        // 2. Segments
-        if (type === "none") {
-            zonesGroup.eachLayer(z => {
-                const pts = z.getLatLngs()[0];
-                for (let i = 0; i < pts.length; i++) {
-                    const p1 = map.latLngToLayerPoint(pts[i]);
-                    const p2 = map.latLngToLayerPoint(pts[(i + 1) % pts.length]);
-                    const closest = L.LineUtil.closestPointOnSegment(mouseP, p1, p2);
-                    if (mouseP.distanceTo(closest) < 30) {
-                        bestLatLng = map.layerPointToLatLng(closest);
-                        type = "segment";
-                    }
-                }
-            });
-        }
-    }
-
-    ghostCursor.setLatLng(bestLatLng);
-    const colors = { angle: "#00ff00", segment: "#00ffff", none: "#ff00ff" };
-    const finalColor = (snapEnabled && !shiftPressed) ? colors[type] : colors["none"];
-    ghostCursor.setStyle({ color: finalColor });
-    document.getElementById('cursor-dot').style.background = finalColor;
+    
+    // Le curseur suit simplement la souris
+    ghostCursor.setLatLng(mouseLatLng);
 });
 
 // --- ACTIONS ---
@@ -98,19 +59,13 @@ map.on('click', () => {
     draftMarkers.push(m);
 });
 
-function toggleSnap() {
-    snapEnabled = !snapEnabled;
-    const btn = document.getElementById('btn-snap');
-    if (btn) {
-        btn.classList.toggle('disabled', !snapEnabled);
-        btn.innerText = snapEnabled ? "Aimant [M]" : "Aimant OFF";
-    }
-}
-
 function exportZone() {
     if (currentDraftPoints.length < 3) return;
     const poly = L.polygon(currentDraftPoints, {color: '#ffcc00', fillOpacity: 0.4}).addTo(zonesGroup);
-    poly.on('contextmenu', (e) => { L.DomEvent.stopPropagation(e); if(confirm("Supprimer ?")) zonesGroup.removeLayer(poly); });
+    poly.on('contextmenu', (e) => { 
+        L.DomEvent.stopPropagation(e); 
+        if(confirm("Supprimer ?")) zonesGroup.removeLayer(poly); 
+    });
     clearEditor();
 }
 
@@ -138,9 +93,7 @@ function toggleMode() {
 // --- RACCOURCIS ---
 window.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
-    if (e.key === "Shift") shiftPressed = true;
     if (key === 'e') toggleMode();
-    if (key === 'm') toggleSnap(); // Raccourci M ajouté
     
     if (isEditorMode) {
         if (e.key === 'Enter') exportZone();
@@ -153,7 +106,6 @@ window.addEventListener('keydown', (e) => {
         }
     }
 });
-window.addEventListener('keyup', (e) => { if (e.key === "Shift") shiftPressed = false; });
 
 // --- UTILS ---
 function enableAutoCenter() { autoCenter = true; map.panTo(myMarker.getLatLng()); }
