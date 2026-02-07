@@ -2,6 +2,12 @@
 // LOBBY
 // ==========================================
 
+let manualTeamsState = {
+    available: [],
+    cats: [],
+    mice: []
+};
+
 function showLobby() {
     loadLobbyMaps();
     
@@ -90,6 +96,7 @@ function updateLobbyPlayers(players) {
     });
 }
 
+// ==================== ÉQUIPES AUTO ====================
 async function autoAssignTeams() {
     if (!window.gameState.isHost) return;
 
@@ -106,21 +113,269 @@ async function autoAssignTeams() {
         mice: []
     };
 
+    // Logique pour éviter équipes de 1 souris
     const miceIds = shuffled.slice(nbCats);
-    for (let i = 0; i < miceIds.length; i += 2) {
-        if (i + 1 < miceIds.length) {
-            teams.mice.push([miceIds[i], miceIds[i + 1]]);
+    let i = 0;
+    while (i < miceIds.length) {
+        const remaining = miceIds.length - i;
+        
+        if (remaining === 1) {
+            // 1 seul restant : ajouter à la dernière équipe existante
+            if (teams.mice.length > 0) {
+                teams.mice[teams.mice.length - 1].push(miceIds[i]);
+            } else {
+                // Cas improbable mais on crée une équipe de 1
+                teams.mice.push([miceIds[i]]);
+            }
+            i++;
+        } else if (remaining === 3) {
+            // 3 restants : faire une équipe de 3
+            teams.mice.push([miceIds[i], miceIds[i + 1], miceIds[i + 2]]);
+            i += 3;
         } else {
-            teams.mice.push([miceIds[i]]);
+            // Sinon faire équipe de 2
+            teams.mice.push([miceIds[i], miceIds[i + 1]]);
+            i += 2;
         }
     }
 
     await dbUpdate(`games/${window.gameState.currentGameId}`, { teams: teams });
 }
 
+// ==================== ÉQUIPES MANUELLES ====================
+async function showManualTeams() {
+    const game = await dbGet(`games/${window.gameState.currentGameId}`);
+    const playerIds = Object.keys(game.players);
+    
+    // Reset state
+    manualTeamsState = {
+        available: playerIds.map(id => ({ id, pseudo: game.players[id].pseudo })),
+        cats: [],
+        mice: []
+    };
+
+    document.getElementById('teams-preview').style.display = 'none';
+    document.getElementById('manual-teams-ui').style.display = 'block';
+    
+    renderManualTeams();
+}
+
+function renderManualTeams() {
+    const availableZone = document.getElementById('available-players');
+    const catsZone = document.getElementById('cats-zone');
+    const miceZone = document.getElementById('mice-zone');
+
+    availableZone.innerHTML = "";
+    catsZone.innerHTML = "";
+    miceZone.innerHTML = "";
+
+    manualTeamsState.available.forEach(player => {
+        availableZone.appendChild(createDraggablePlayer(player));
+    });
+
+    manualTeamsState.cats.forEach(player => {
+        catsZone.appendChild(createDraggablePlayer(player));
+    });
+
+    manualTeamsState.mice.forEach(player => {
+        miceZone.appendChild(createDraggablePlayer(player));
+    });
+
+    // Setup drop zones
+    [availableZone, catsZone, miceZone].forEach(zone => {
+        zone.addEventListener('dragover', handleDragOver);
+        zone.addEventListener('drop', handleDrop);
+        zone.addEventListener('dragleave', handleDragLeave);
+    });
+}
+
+function createDraggablePlayer(player) {
+    const div = document.createElement('div');
+    div.className = 'draggable-player';
+    div.textContent = player.pseudo;
+    div.draggable = true;
+    div.dataset.playerId = player.id;
+    
+    div.addEventListener('dragstart', handleDragStart);
+    div.addEventListener('dragend', handleDragEnd);
+    
+    // Touch events pour mobile
+    div.addEventListener('touchstart', handleTouchStart);
+    div.addEventListener('touchmove', handleTouchMove);
+    div.addEventListener('touchend', handleTouchEnd);
+    
+    return div;
+}
+
+let draggedElement = null;
+let touchClone = null;
+
+function handleDragStart(e) {
+    draggedElement = e.target;
+    e.target.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.target.innerHTML);
+}
+
+function handleDragEnd(e) {
+    e.target.classList.remove('dragging');
+}
+
+function handleDragOver(e) {
+    if (e.preventDefault) e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    e.target.closest('.player-drop-zone')?.classList.add('drag-over');
+    return false;
+}
+
+function handleDragLeave(e) {
+    e.target.closest('.player-drop-zone')?.classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+    if (e.stopPropagation) e.stopPropagation();
+    e.preventDefault();
+
+    const dropZone = e.target.closest('.player-drop-zone');
+    if (!dropZone) return;
+
+    dropZone.classList.remove('drag-over');
+
+    const playerId = draggedElement.dataset.playerId;
+    const targetTeam = dropZone.id.replace('-zone', '').replace('-players', 'available');
+    
+    movePlayer(playerId, targetTeam);
+    
+    return false;
+}
+
+// Touch events pour mobile
+function handleTouchStart(e) {
+    draggedElement = e.target;
+    e.target.classList.add('dragging');
+    
+    const touch = e.touches[0];
+    const rect = e.target.getBoundingClientRect();
+    
+    touchClone = e.target.cloneNode(true);
+    touchClone.style.position = 'fixed';
+    touchClone.style.left = touch.clientX - rect.width / 2 + 'px';
+    touchClone.style.top = touch.clientY - rect.height / 2 + 'px';
+    touchClone.style.opacity = '0.8';
+    touchClone.style.zIndex = '10000';
+    touchClone.style.pointerEvents = 'none';
+    document.body.appendChild(touchClone);
+}
+
+function handleTouchMove(e) {
+    e.preventDefault();
+    if (!touchClone) return;
+    
+    const touch = e.touches[0];
+    const rect = draggedElement.getBoundingClientRect();
+    
+    touchClone.style.left = touch.clientX - rect.width / 2 + 'px';
+    touchClone.style.top = touch.clientY - rect.height / 2 + 'px';
+}
+
+function handleTouchEnd(e) {
+    if (!touchClone) return;
+    
+    const touch = e.changedTouches[0];
+    const dropZone = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.player-drop-zone');
+    
+    if (dropZone) {
+        const playerId = draggedElement.dataset.playerId;
+        const targetTeam = dropZone.id.replace('-zone', '').replace('-players', 'available');
+        movePlayer(playerId, targetTeam);
+    }
+    
+    draggedElement.classList.remove('dragging');
+    document.body.removeChild(touchClone);
+    touchClone = null;
+    draggedElement = null;
+}
+
+function movePlayer(playerId, targetTeam) {
+    // Trouver le joueur
+    let player = null;
+    let sourceTeam = null;
+
+    ['available', 'cats', 'mice'].forEach(team => {
+        const index = manualTeamsState[team].findIndex(p => p.id === playerId);
+        if (index !== -1) {
+            player = manualTeamsState[team][index];
+            sourceTeam = team;
+            manualTeamsState[team].splice(index, 1);
+        }
+    });
+
+    if (!player) return;
+
+    // Ajouter à la nouvelle équipe
+    manualTeamsState[targetTeam].push(player);
+    renderManualTeams();
+}
+
+async function confirmManualTeams() {
+    const nbCats = manualTeamsState.cats.length;
+    const nbMice = manualTeamsState.mice.length;
+
+    if (nbCats < 2) {
+        alert("Il faut au moins 2 chats");
+        return;
+    }
+
+    if (nbMice < 2) {
+        alert("Il faut au moins 2 souris");
+        return;
+    }
+
+    // Former les équipes de souris (par 2 ou 3, jamais 1)
+    const miceTeams = [];
+    let i = 0;
+    while (i < manualTeamsState.mice.length) {
+        const remaining = manualTeamsState.mice.length - i;
+        
+        if (remaining === 1) {
+            // Ajouter à la dernière équipe
+            if (miceTeams.length > 0) {
+                miceTeams[miceTeams.length - 1].push(manualTeamsState.mice[i].id);
+            } else {
+                miceTeams.push([manualTeamsState.mice[i].id]);
+            }
+            i++;
+        } else if (remaining === 3) {
+            miceTeams.push([
+                manualTeamsState.mice[i].id,
+                manualTeamsState.mice[i + 1].id,
+                manualTeamsState.mice[i + 2].id
+            ]);
+            i += 3;
+        } else {
+            miceTeams.push([
+                manualTeamsState.mice[i].id,
+                manualTeamsState.mice[i + 1].id
+            ]);
+            i += 2;
+        }
+    }
+
+    const teams = {
+        cats: manualTeamsState.cats.map(p => p.id),
+        mice: miceTeams
+    };
+
+    await dbUpdate(`games/${window.gameState.currentGameId}`, { teams: teams });
+    
+    document.getElementById('manual-teams-ui').style.display = 'none';
+    document.getElementById('teams-preview').style.display = 'block';
+}
+
 function displayTeamsPreview(teams, players) {
     const preview = document.getElementById('teams-preview');
     preview.innerHTML = "";
+    preview.style.display = 'block';
 
     const catsDiv = document.createElement('div');
     catsDiv.className = 'team-group';
@@ -147,6 +402,7 @@ function displayTeamsPreview(teams, players) {
     });
 }
 
+// ==================== MODIFIERS ====================
 function initModifiers() {
     const list = document.getElementById('modifiers-list');
     list.innerHTML = "";
@@ -178,14 +434,38 @@ async function updateSelectedModifiers() {
 async function randomModifier() {
     const keys = Object.keys(MODIFIERS);
     const randomKey = randomChoice(keys);
+    
+    // Décocher tous
+    const checkboxes = document.querySelectorAll('#modifiers-list input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        cb.checked = false;
+        cb.closest('.modifier-item').classList.remove('selected');
+    });
+    
+    // Cocher le random
+    const checkbox = document.getElementById(`mod-${randomKey}`);
+    if (checkbox) {
+        checkbox.checked = true;
+        checkbox.closest('.modifier-item').classList.add('selected');
+    }
+    
     await dbUpdate(`games/${window.gameState.currentGameId}`, { modifiers: { [randomKey]: true } });
 }
 
 function displayModifiersPreview(modifiers) {
-    if (Object.keys(modifiers).length === 0) return;
-    // Les modifiers cochés sont déjà affichés via initModifiers
+    if (!modifiers || Object.keys(modifiers).length === 0) return;
+    
+    // Cocher les modifiers déjà sélectionnés
+    Object.keys(modifiers).forEach(key => {
+        const checkbox = document.getElementById(`mod-${key}`);
+        if (checkbox && modifiers[key]) {
+            checkbox.checked = true;
+            checkbox.closest('.modifier-item').classList.add('selected');
+        }
+    });
 }
 
+// ==================== LANCEMENT ====================
 async function startGameLobby() {
     if (!window.gameState.isHost) return;
 
@@ -198,9 +478,9 @@ async function startGameLobby() {
     const map = await dbGet(`maps/${game.mapId}`);
     let finalZoneIndex = Math.floor(Math.random() * map.zones.length);
 
-    // Si modifier "final_zone_choice", ne pas choisir maintenant
+    // Si modifier "final_zone_choice", les chats choisiront pendant la phase cache
     if (game.modifiers && game.modifiers.final_zone_choice) {
-        finalZoneIndex = -1; // Les chats choisiront
+        finalZoneIndex = -1;
     }
 
     const totalTime = calculateTotalTime(map.zones.length);
@@ -230,7 +510,8 @@ async function startGameLobby() {
         pings: {},
         players: {},
         modifierStates: {},
-        zonesToDelete: 0
+        zonesToDelete: 0,
+        isPaused: false
     });
 }
 
@@ -253,7 +534,7 @@ async function leaveLobby() {
     goToDashboard();
 }
 
-// Event listeners
+// ==================== EVENT LISTENERS ====================
 document.getElementById('lobby-map-select').addEventListener('change', async (e) => {
     if (window.gameState.isHost) {
         await dbUpdate(`games/${window.gameState.currentGameId}`, { mapId: e.target.value });
@@ -262,10 +543,14 @@ document.getElementById('lobby-map-select').addEventListener('change', async (e)
 
 document.getElementById('btn-auto-teams').addEventListener('click', autoAssignTeams);
 document.getElementById('btn-manual-teams').addEventListener('click', () => {
-    alert("Équipes manuelles : À implémenter");
+    showManualTeams();
 });
+document.getElementById('btn-confirm-manual-teams').addEventListener('click', confirmManualTeams);
 
-document.getElementById('btn-random-modifier').addEventListener('click', randomModifier);
+document.getElementById('btn-random-modifier').addEventListener('click', () => {
+    initModifiers();
+    randomModifier();
+});
 document.getElementById('btn-manual-modifiers').addEventListener('click', initModifiers);
 
 document.getElementById('btn-start-game').addEventListener('click', startGameLobby);

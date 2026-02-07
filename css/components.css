@@ -68,6 +68,107 @@
     flex: 1;
 }
 
+/* ==================== BOUTONS ICÔNES (pause, centrage) ==================== */
+.btn-icon {
+    background: var(--secondary);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 18px;
+    min-width: 40px;
+}
+
+.btn-icon.active {
+    background: var(--success);
+    color: #000;
+}
+
+.header-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ==================== PAUSE OVERLAY ==================== */
+.pause-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pause-overlay h1 {
+    color: var(--primary);
+    font-size: 48px;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+/* ==================== ÉQUIPES MANUELLES ==================== */
+.manual-teams-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.team-zone {
+    background: var(--bg-input);
+    padding: 12px;
+    border-radius: 8px;
+    border: 2px dashed var(--border);
+}
+
+.team-zone h4 {
+    color: var(--primary);
+    margin-bottom: 8px;
+    font-size: 13px;
+    text-align: center;
+}
+
+.player-drop-zone {
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.player-drop-zone.drag-over {
+    border-color: var(--primary);
+    background: rgba(255, 204, 0, 0.1);
+}
+
+.draggable-player {
+    background: var(--bg-card);
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    font-size: 13px;
+    cursor: grab;
+    text-align: center;
+    user-select: none;
+    touch-action: none;
+}
+
+.draggable-player.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.draggable-player:active {
+    cursor: grabbing;
+}
+
 /* ==================== EDITOR ==================== */
 .editor-ui {
     position: absolute;

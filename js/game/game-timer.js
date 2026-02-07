@@ -4,7 +4,13 @@
 
 function startGameTimer(totalSeconds) {
     const updateTimer = async () => {
-        const elapsed = Math.floor((Date.now() - window.gameState.gameStartTime) / 1000);
+        // Vérifier si en pause
+        if (window.gameState.isPaused) {
+            window.gameState.gameTimer = setTimeout(updateTimer, 100);
+            return;
+        }
+
+        const elapsed = Math.floor((Date.now() - window.gameState.gameStartTime - window.gameState.pausedDuration) / 1000);
         const remaining = Math.max(0, totalSeconds - elapsed);
 
         document.getElementById('game-timer').textContent = formatTime(remaining);
@@ -22,7 +28,7 @@ function startGameTimer(totalSeconds) {
 
             if (window.gameState.myRole === 'cat') {
                 // Les chats peuvent supprimer 2 zones au début
-                dbUpdate(`gameState/${window.gameState.currentGameId}`, {
+                await dbUpdate(`gameState/${window.gameState.currentGameId}`, {
                     zonesToDelete: 2
                 });
             }
@@ -59,4 +65,44 @@ function startGameTimer(totalSeconds) {
     };
 
     updateTimer();
+}
+
+// Écouter les changements de pause dans Firebase
+function listenToPause() {
+    window.gameState.pauseListener = dbListen(`gameState/${window.gameState.currentGameId}/isPaused`, (snapshot) => {
+        const isPaused = snapshot.val() || false;
+        
+        if (isPaused && !window.gameState.isPaused) {
+            // Passage en pause
+            window.gameState.isPaused = true;
+            window.gameState.lastPauseTime = Date.now();
+            document.getElementById('pause-overlay').style.display = 'flex';
+            updatePauseButton();
+        } else if (!isPaused && window.gameState.isPaused) {
+            // Sortie de pause
+            const pauseDuration = Date.now() - window.gameState.lastPauseTime;
+            window.gameState.pausedDuration += pauseDuration;
+            window.gameState.isPaused = false;
+            document.getElementById('pause-overlay').style.display = 'none';
+            updatePauseButton();
+        }
+    });
+}
+
+async function togglePause() {
+    const currentState = await dbGet(`gameState/${window.gameState.currentGameId}/isPaused`);
+    await dbUpdate(`gameState/${window.gameState.currentGameId}`, {
+        isPaused: !currentState
+    });
+}
+
+function updatePauseButton() {
+    const btn = document.getElementById('btn-pause');
+    if (window.gameState.isPaused) {
+        btn.textContent = '▶️';
+        btn.title = 'Reprendre';
+    } else {
+        btn.textContent = '⏸️';
+        btn.title = 'Pause';
+    }
 }

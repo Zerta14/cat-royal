@@ -7,7 +7,7 @@ button {
 }
 
 /* Prevent text selection on interactive elements */
-button, .list-item, .player-tag, .modifier-item {
+button, .list-item, .player-tag, .modifier-item, .draggable-player {
     user-select: none;
     -webkit-user-select: none;
 }
@@ -42,6 +42,14 @@ button, .list-item, .player-tag, .modifier-item {
     
     .players-grid {
         grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    }
+
+    .manual-teams-container {
+        grid-template-columns: 1fr;
+    }
+
+    .pause-overlay h1 {
+        font-size: 36px;
     }
 }
 
@@ -80,6 +88,15 @@ button, .list-item, .player-tag, .modifier-item {
         top: 10px;
         right: 10px;
         left: 10px;
+    }
+
+    .btn-icon {
+        padding: 6px 10px;
+        font-size: 16px;
+    }
+
+    .pause-overlay h1 {
+        font-size: 28px;
     }
 }
 

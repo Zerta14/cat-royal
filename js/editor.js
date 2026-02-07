@@ -25,10 +25,36 @@ function initEditor() {
         document.body.classList.add('editor-active');
         document.getElementById('custom-cursor').style.display = 'block';
     } else {
+        // IMPORTANT : Nettoyer TOUTES les zones existantes
+        clearEditorMap();
         window.gameState.mapEditor.invalidateSize();
     }
 
     updateZoneCount();
+}
+
+function clearEditorMap() {
+    // Supprimer toutes les zones
+    window.gameState.editorZones.forEach(zone => {
+        if (window.gameState.mapEditor.hasLayer(zone)) {
+            window.gameState.mapEditor.removeLayer(zone);
+        }
+    });
+    
+    // Reset toutes les variables
+    window.gameState.editorZones = [];
+    window.gameState.currentDraftPoints = [];
+    window.gameState.draftMarkers.forEach(m => {
+        if (window.gameState.mapEditor.hasLayer(m)) {
+            window.gameState.mapEditor.removeLayer(m);
+        }
+    });
+    window.gameState.draftMarkers = [];
+    window.gameState.undoStack = [];
+    
+    if (window.gameState.tempLines) {
+        window.gameState.tempLines.setLatLngs([]);
+    }
 }
 
 async function loadMapForEditing(mapId) {
@@ -282,10 +308,8 @@ async function deleteMapEditor() {
 }
 
 function leaveEditor() {
-    window.gameState.editorZones = [];
+    clearEditorMap();
     window.gameState.editingMapId = null;
-    window.gameState.undoStack = [];
-    clearDraft();
     document.getElementById('map-name-input').value = "";
     document.getElementById('btn-delete-map').style.display = 'none';
     document.body.classList.remove('editor-active');

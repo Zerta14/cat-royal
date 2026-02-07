@@ -4,9 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#ffcc00">
+    
     <title>CatRoyal 🐾</title>
     
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="icons/icon-192.svg">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    
+    <!-- CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/components.css">
@@ -78,6 +87,25 @@
                     <button id="btn-manual-teams" class="btn-secondary">✋ Manuel</button>
                 </div>
                 <div id="teams-preview"></div>
+                
+                <!-- Interface équipes manuelles -->
+                <div id="manual-teams-ui" style="display:none;">
+                    <div class="manual-teams-container">
+                        <div class="team-zone">
+                            <h4>Disponibles</h4>
+                            <div id="available-players" class="player-drop-zone"></div>
+                        </div>
+                        <div class="team-zone">
+                            <h4>🐱 Chats</h4>
+                            <div id="cats-zone" class="player-drop-zone" data-team="cats"></div>
+                        </div>
+                        <div class="team-zone">
+                            <h4>🐭 Souris</h4>
+                            <div id="mice-zone" class="player-drop-zone" data-team="mice"></div>
+                        </div>
+                    </div>
+                    <button id="btn-confirm-manual-teams" class="btn-primary" style="margin-top:10px;">✅ Valider</button>
+                </div>
             </section>
 
             <section class="section" id="lobby-modifiers-section" style="display:none;">
@@ -116,6 +144,11 @@
     <!-- ==================== GAME ==================== -->
     <div id="page-game" class="page" style="display:none;">
         <div id="modifier-border" class="modifier-border" style="display:none;"></div>
+        
+        <!-- Overlay Pause -->
+        <div id="pause-overlay" class="pause-overlay" style="display:none;">
+            <h1>⏸️ PAUSE</h1>
+        </div>
 
         <div class="game-ui">
             <div class="game-header">
@@ -123,9 +156,13 @@
                     <div id="game-phase" class="phase-text">Cache</div>
                     <div id="game-timer" class="timer-text">3:00</div>
                 </div>
-                <button id="btn-notifications" class="btn-notif">
-                    🔔 <span id="notif-badge" class="badge" style="display:none;">0</span>
-                </button>
+                <div class="header-buttons">
+                    <button id="btn-pause" class="btn-icon" title="Pause">⏸️</button>
+                    <button id="btn-center" class="btn-icon active" title="Centrage auto">📍</button>
+                    <button id="btn-notifications" class="btn-notif">
+                        🔔 <span id="notif-badge" class="badge" style="display:none;">0</span>
+                    </button>
+                </div>
             </div>
 
             <div class="game-stats">
@@ -165,6 +202,7 @@
         <div id="map-game"></div>
     </div>
 
+    <!-- Scripts -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -179,10 +217,17 @@
     <script src="js/lobby.js"></script>
     <script src="js/editor.js"></script>
     <script src="js/game/game-notifications.js"></script>
-    <script src="js/game/game-modifiers.js"></script>
     <script src="js/game/game-pings.js"></script>
+    <script src="js/game/game-modifiers.js"></script>
     <script src="js/game/game-zones.js"></script>
     <script src="js/game/game-timer.js"></script>
     <script src="js/game/game-main.js"></script>
+    
+    <!-- PWA Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
+        }
+    </script>
 </body>
 </html>

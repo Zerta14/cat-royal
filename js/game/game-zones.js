@@ -23,11 +23,46 @@ function displayZones() {
         poly.zoneIndex = index;
         window.gameState.gamePolygons.push(poly);
 
-        // Chats peuvent cliquer pour supprimer
+        // Chats peuvent cliquer
         if (window.gameState.myRole === 'cat') {
-            poly.on('click', () => deleteZone(index));
+            poly.on('click', () => handleZoneClick(index));
         }
     });
+}
+
+async function handleZoneClick(zoneIndex) {
+    if (window.gameState.myRole !== 'cat') return;
+
+    // Pendant phase cache : sélectionner zone finale (si modifier activé)
+    if (window.gameState.currentPhase === 'hiding' && 
+        window.gameState.activeModifiers.final_zone_choice &&
+        window.gameState.finalZoneIndex === -1) {
+        
+        if (!confirmAction(`Choisir Zone ${zoneIndex + 1} comme zone finale ?`)) {
+            return;
+        }
+
+        await dbUpdate(`games/${window.gameState.currentGameId}`, {
+            finalZoneIndex: zoneIndex
+        });
+
+        window.gameState.finalZoneIndex = zoneIndex;
+        
+        // Mettre à jour visuellement
+        window.gameState.gamePolygons[zoneIndex].setStyle({
+            color: '#00ff00',
+            fillColor: '#00ff00',
+            fillOpacity: 0.3
+        });
+
+        document.getElementById('final-zone-info').textContent = `Zone finale: Zone ${zoneIndex + 1}`;
+        addNotification(`Zone ${zoneIndex + 1} choisie comme finale`, "🎯");
+        
+        return;
+    }
+
+    // Sinon : supprimer zone
+    await deleteZone(zoneIndex);
 }
 
 async function deleteZone(zoneIndex) {
@@ -47,6 +82,11 @@ async function deleteZone(zoneIndex) {
     const deletedZones = await dbGet(`gameState/${window.gameState.currentGameId}/deletedZones`) || [];
     if (deletedZones.includes(zoneIndex)) {
         alert("Zone déjà supprimée");
+        return;
+    }
+
+    // Confirmation
+    if (!confirmAction(`Supprimer Zone ${zoneIndex + 1} ?`)) {
         return;
     }
 
@@ -83,6 +123,29 @@ function updateZonesToDeleteDisplay() {
     dbListen(`gameState/${window.gameState.currentGameId}/zonesToDelete`, (snapshot) => {
         const count = snapshot.val() || 0;
         document.getElementById('zones-to-delete').textContent = count;
+    });
+}
+
+function updateFinalZoneDisplay() {
+    if (window.gameState.myRole !== 'cat') return;
+
+    dbListen(`games/${window.gameState.currentGameId}/finalZoneIndex`, (snapshot) => {
+        const index = snapshot.val();
+        if (index !== null && index !== -1) {
+            window.gameState.finalZoneIndex = index;
+            
+            if (window.gameState.gamePolygons[index]) {
+                window.gameState.gamePolygons[index].setStyle({
+                    color: '#00ff00',
+                    fillColor: '#00ff00',
+                    fillOpacity: 0.3
+                });
+            }
+
+            document.getElementById('final-zone-info').textContent = `Zone finale: Zone ${index + 1}`;
+        } else if (window.gameState.activeModifiers.final_zone_choice) {
+            document.getElementById('final-zone-info').textContent = "Cliquez pour choisir zone finale";
+        }
     });
 }
 
@@ -123,7 +186,7 @@ function handleDeadZone(lat, lng) {
 
     // Ping après 1 minute
     if (timeInDeadZone >= DEAD_ZONE_PING_TIME && !window.gameState.penaltyPingSent) {
-        sendPenaltyPing(lat, lng);
+        sendPenaltyPing(window.gameState.currentUser.id, lat, lng);
         window.gameState.penaltyPingSent = true;
         addNotification("Position révélée !", "⚠️");
     }

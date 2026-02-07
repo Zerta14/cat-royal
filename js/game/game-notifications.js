@@ -52,6 +52,7 @@ function displayNotifications() {
         list.appendChild(div);
     });
 
+    // Marquer comme lu
     window.gameState.unreadCount = 0;
     updateNotificationBadge();
 }
@@ -69,18 +70,30 @@ function loadNotificationsFromFirebase() {
         if (!snapshot.exists()) return;
 
         const notifs = snapshot.val();
-        const newNotifs = Object.values(notifs).filter(n => 
-            !window.gameState.notifications.some(existing => 
-                existing.timestamp === n.timestamp && existing.message === n.message
-            )
-        );
-
-        newNotifs.forEach(notif => {
-            window.gameState.notifications.push(notif);
-            window.gameState.unreadCount++;
-        });
-
-        updateNotificationBadge();
+        const notifsArray = Object.values(notifs);
+        
+        // Calculer combien de nouvelles notifs
+        const newCount = notifsArray.length - window.gameState.lastNotificationCount;
+        
+        if (newCount > 0) {
+            // Ajouter seulement les nouvelles
+            const newNotifs = notifsArray.slice(-newCount);
+            newNotifs.forEach(notif => {
+                // Vérifier qu'elle n'existe pas déjà (double check)
+                const exists = window.gameState.notifications.some(n => 
+                    n.timestamp === notif.timestamp && n.message === notif.message
+                );
+                
+                if (!exists) {
+                    window.gameState.notifications.push(notif);
+                    window.gameState.unreadCount++;
+                }
+            });
+            
+            updateNotificationBadge();
+        }
+        
+        window.gameState.lastNotificationCount = notifsArray.length;
     });
 }
 

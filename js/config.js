@@ -105,6 +105,12 @@ window.gameState = {
     myMarker: null,
     gpsWatchId: null,
     
+    // Pause & Centrage
+    isPaused: false,
+    autoCenterEnabled: true,
+    lastPauseTime: 0,
+    pausedDuration: 0,
+    
     // Modifiers
     activeModifiers: {},
     modifierStates: {},
@@ -120,9 +126,11 @@ window.gameState = {
     // Notifications
     notifications: [],
     unreadCount: 0,
+    lastNotificationCount: 0,
     
     // Listeners Firebase
     gameListener: null,
     gameStateListener: null,
-    playersListener: null
+    playersListener: null,
+    pauseListener: null
 };

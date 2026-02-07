@@ -17,6 +17,10 @@ async function startGamePhase() {
     window.gameState.isAlive = true;
     window.gameState.notifications = [];
     window.gameState.unreadCount = 0;
+    window.gameState.lastNotificationCount = 0;
+    window.gameState.isPaused = false;
+    window.gameState.pausedDuration = 0;
+    window.gameState.autoCenterEnabled = true;
 
     // Initialiser la carte
     if (!window.gameState.mapGame) {
@@ -27,6 +31,14 @@ async function startGamePhase() {
         });
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png')
             .addTo(window.gameState.mapGame);
+        
+        // Désactiver centrage auto si l'utilisateur bouge la map
+        window.gameState.mapGame.on('dragstart', () => {
+            if (window.gameState.autoCenterEnabled) {
+                window.gameState.autoCenterEnabled = false;
+                updateCenterButton();
+            }
+        });
     } else {
         window.gameState.mapGame.invalidateSize();
     }
@@ -34,6 +46,7 @@ async function startGamePhase() {
     // Afficher les zones
     displayZones();
     updateDeletedZonesDisplay();
+    updateFinalZoneDisplay();
 
     // Marker joueur
     window.gameState.myMarker = L.circleMarker([48.8475, 2.4390], {
@@ -49,8 +62,9 @@ async function startGamePhase() {
     // GPS
     startGPSTracking();
     
-    // Timer
+    // Timer + Pause
     startGameTimer(game.totalTime);
+    listenToPause();
     
     // Pings
     if (window.gameState.myRole === 'cat') {
@@ -85,8 +99,10 @@ function setupGameUI() {
         if (window.gameState.finalZoneIndex >= 0) {
             document.getElementById('final-zone-info').textContent = 
                 `Zone finale: Zone ${window.gameState.finalZoneIndex + 1}`;
+        } else if (window.gameState.activeModifiers.final_zone_choice) {
+            document.getElementById('final-zone-info').textContent = "Cliquez pour choisir zone finale";
         } else {
-            document.getElementById('final-zone-info').textContent = "Choisissez la zone finale";
+            document.getElementById('final-zone-info').textContent = "";
         }
     } else {
         document.getElementById('cat-controls').style.display = 'none';
@@ -103,8 +119,15 @@ function startGPSTracking() {
             const lng = position.coords.longitude;
             window.gameState.myPosition = [lat, lng];
 
+            // Ne pas update si en pause
+            if (window.gameState.isPaused) return;
+
             window.gameState.myMarker.setLatLng([lat, lng]);
-            window.gameState.mapGame.setView([lat, lng], window.gameState.mapGame.getZoom());
+            
+            // Centrage auto
+            if (window.gameState.autoCenterEnabled) {
+                window.gameState.mapGame.setView([lat, lng], window.gameState.mapGame.getZoom());
+            }
 
             // Mettre à jour dans Firebase
             dbUpdate(`gameState/${window.gameState.currentGameId}/players/${window.gameState.currentUser.id}`, {
@@ -121,6 +144,22 @@ function startGPSTracking() {
         },
         { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
     );
+}
+
+function toggleCenter() {
+    window.gameState.autoCenterEnabled = !window.gameState.autoCenterEnabled;
+    updateCenterButton();
+    
+    // Recentrer immédiatement si activé
+    if (window.gameState.autoCenterEnabled && window.gameState.myPosition) {
+        window.gameState.mapGame.setView(window.gameState.myPosition, window.gameState.mapGame.getZoom());
+    }
+}
+
+function updateCenterButton() {
+    const btn = document.getElementById('btn-center');
+    btn.classList.toggle('active', window.gameState.autoCenterEnabled);
+    btn.title = window.gameState.autoCenterEnabled ? 'Centrage auto ON' : 'Centrage auto OFF';
 }
 
 async function declareTouched() {
@@ -145,7 +184,6 @@ async function eliminatePlayer() {
 
     // Modifier first_touch_cat
     if (window.gameState.activeModifiers.first_touch_cat) {
-        const game = await dbGet(`games/${window.gameState.currentGameId}`);
         const alreadyApplied = await dbGet(`gameState/${window.gameState.currentGameId}/modifierStates/first_touch_applied`);
         
         if (!alreadyApplied) {
@@ -177,6 +215,9 @@ async function quitGame() {
     if (window.gameState.gpsWatchId) {
         navigator.geolocation.clearWatch(window.gameState.gpsWatchId);
     }
+    if (window.gameState.pauseListener) {
+        dbUnlisten(window.gameState.pauseListener);
+    }
 
     await leaveGame();
 }
@@ -207,6 +248,9 @@ function endGame() {
     if (window.gameState.gpsWatchId) {
         navigator.geolocation.clearWatch(window.gameState.gpsWatchId);
     }
+    if (window.gameState.pauseListener) {
+        dbUnlisten(window.gameState.pauseListener);
+    }
 
     alert("Partie terminée !");
     
@@ -220,3 +264,5 @@ function endGame() {
 // Event listeners
 document.getElementById('btn-declare-touched').addEventListener('click', declareTouched);
 document.getElementById('btn-quit-game').addEventListener('click', quitGame);
+document.getElementById('btn-pause').addEventListener('click', togglePause);
+document.getElementById('btn-center').addEventListener('click', toggleCenter);

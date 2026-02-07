@@ -3,7 +3,6 @@
 // ==========================================
 
 function setupModifiers() {
-    const game = window.gameState.activeModifiers;
     const role = window.gameState.myRole;
 
     if (role === 'cat') {
@@ -69,18 +68,19 @@ async function usePingTotal() {
 
     Object.entries(players).forEach(([playerId, player]) => {
         if (game.players[playerId].role === 'mouse' && player.alive) {
-            dbUpdate(`gameState/${window.gameState.currentGameId}/pings/${playerId}`, {
-                lat: player.lat,
-                lng: player.lng,
-                pseudo: game.players[playerId].pseudo,
-                type: 'ping_total',
-                timestamp: Date.now()
-            });
+            sendPing(playerId, player.lat, player.lng, 'ping_total', 'cats');
         }
     });
 
     addNotification("Ping Total activé !", "⚡");
-    document.querySelector('#cat-modifiers button').remove();
+    
+    // Supprimer le bouton pour tous les chats
+    const btns = document.querySelectorAll('#cat-modifiers button');
+    btns.forEach(btn => {
+        if (btn.textContent.includes('Ping Total')) {
+            btn.remove();
+        }
+    });
 }
 
 async function useForceZoneChange() {
@@ -97,7 +97,13 @@ async function useForceZoneChange() {
     });
 
     addNotification("Changement forcé activé !", "🔄");
-    document.querySelector('#cat-modifiers button[textContent*="Forcer"]')?.remove();
+    
+    const btns = document.querySelectorAll('#cat-modifiers button');
+    btns.forEach(btn => {
+        if (btn.textContent.includes('Forcer')) {
+            btn.remove();
+        }
+    });
 }
 
 async function useRevealCats() {
@@ -133,7 +139,13 @@ async function useRevealCats() {
     });
 
     addNotification("Position des chats révélée !", "👀");
-    document.querySelector('#mouse-modifiers button')?.remove();
+    
+    const btns = document.querySelectorAll('#mouse-modifiers button');
+    btns.forEach(btn => {
+        if (btn.textContent.includes('Révéler')) {
+            btn.remove();
+        }
+    });
 }
 
 function checkForceZoneChange() {
@@ -175,8 +187,16 @@ function checkForceZoneChange() {
                     });
                 }
             } else {
-                sendPenaltyPing(window.gameState.myPosition[0], window.gameState.myPosition[1]);
+                // Temps écoulé : ping
+                sendForceZonePing(
+                    window.gameState.currentUser.id,
+                    window.gameState.myPosition[0],
+                    window.gameState.myPosition[1]
+                );
                 hideMission();
+                dbUpdate(`gameState/${window.gameState.currentGameId}/modifierStates`, {
+                    force_zone_change_active: false
+                });
             }
         }
     });
@@ -208,7 +228,11 @@ function checkCamping() {
         const elapsed = Date.now() - window.gameState.lastMovementTime;
         if (elapsed >= CAMPING_TIME) {
             if (!window.gameState.campingWarningShown) {
-                sendPenaltyPing(window.gameState.myPosition[0], window.gameState.myPosition[1]);
+                sendCampingPing(
+                    window.gameState.currentUser.id,
+                    window.gameState.myPosition[0],
+                    window.gameState.myPosition[1]
+                );
                 addNotification("Camping détecté !", "🚫");
                 window.gameState.campingWarningShown = true;
             }
